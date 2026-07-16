@@ -68,6 +68,16 @@
   #lb{margin-top:14px;text-align:left;font-size:12px;font-weight:700;display:none;background:rgba(0,0,0,.3);border-radius:12px;padding:10px 14px;max-height:32vh;overflow:auto}
   #lb li{margin:6px 0;list-style:none}
   .oculto{display:none!important}
+
+  /* ---- Tienda ---- */
+  .item{display:flex;align-items:center;gap:10px;background:rgba(0,0,0,.3);border-radius:12px;
+    padding:10px 12px;margin:8px 0;font-size:13px;font-weight:800;text-align:left}
+  .item .bola{width:22px;height:22px;border-radius:50%;border:2px solid rgba(245,232,200,.6);flex:none}
+  .item .nom{flex:1}
+  .item button{font-family:'Nunito';font-weight:800;font-size:12px;border:0;border-radius:10px;
+    padding:8px 12px;cursor:pointer;background:var(--hueso);color:#3b2a1a;box-shadow:0 3px 0 #b09b6f}
+  .item button:disabled{opacity:.45;box-shadow:none}
+  .item button.puesto{background:#7CFF6B;box-shadow:0 3px 0 #3f9636}
 </style>
 </head>
 <body>
@@ -97,12 +107,13 @@
     <div class="sub">Tote, 12 años de staffy bueno 🐶<br>persiguiendo todo lo que se mueve</div>
     <div class="howto">
       👆 Toca para saltar · doble toque = doble salto<br>
-      🐦 Ojo con las palomas: ¡a veces NO hay que saltar!<br>
+      ⬇️ Desliza hacia abajo (o flecha ↓) = caer a plomo<br>
+      🐦 ¡Cae ENCIMA de una paloma y rebotas con puntos!<br>
+      🔗 Encadena palomas y huesos sin pisar suelo = COMBO<br>
       🐱 Si aparece un gato… agárrate: modo TURBO<br>
-      🌭 Frank te lanza salchichas = escudo<br>
-      ❤️ Ella te da caricias = puntos x2<br>
-      🍪 El abuelo te da una galleta = todo va más lento
+      🌭 Salchicha = escudo · ❤️ Caricias = x2 · 🍪 Galleta = calma
     </div>
+    <button class="btn" id="btnTienda">🛍️ Tienda de Tote · 🦴 <span id="menuBanco">0</span></button>
     <div id="authBar" class="oculto">
       <button class="btn" id="btnLogin">🔑 Entrar con Google</button>
       <div id="quien"></div>
@@ -130,6 +141,19 @@
   <div class="tap pix">— TOCA PARA SEGUIR —</div></div>
 </div>
 
+<!-- TIENDA 🛍️ -->
+<div class="screen oculto" id="tienda">
+  <div class="panel">
+    <div class="pix" style="font-size:16px">🛍️ TIENDA</div>
+    <div class="stat">🦴 Hucha: <b id="tiendaBanco">0</b></div>
+    <div id="tiendaItems" style="margin-top:14px"></div>
+    <button class="btn" id="btnCerrarTienda">← Volver</button>
+  </div>
+</div>
+
+<!-- 🎵 Música de fondo (pon un "musica.mp3" en la misma carpeta) -->
+<audio id="musicaFondo" loop preload="auto" src="musica.mp3"></audio>
+
 <script>
 /* ============================================================
    🔥 FIREBASE (opcional) — para récords online + login Google
@@ -143,20 +167,23 @@
         allow write: if request.auth != null && request.auth.uid == uid;
       }
    ============================================================ */
-const ENABLE_FIREBASE = true;
+const ENABLE_FIREBASE = false;
 const firebaseConfig = {
-  apiKey: "AIzaSyBkQ4NcoxU0V_R3jXnkH5Eu9WRDpr9eKXo",
-  authDomain: "mishoras-bb0cc.firebaseapp.com",
-  projectId: "mishoras-bb0cc",
-  appId: "1:282064047722:web:24a04aabeecb4a67394413"
+  apiKey: "PEGA_AQUI",
+  authDomain: "TU_PROYECTO.firebaseapp.com",
+  projectId: "TU_PROYECTO",
+  appId: "PEGA_AQUI"
 };
 
 /* ================= CONFIG DEL JUEGO ================= */
 const CFG = {
   gravedad: 2600, salto: -880, dobleSalto: -800,
-  velIni: 300, velMax: 700, acel: 7,           // px/s, px/s²
+  caidaRapida: 1900,                            // smash: caer a plomo
+  velIni: 200, velMax: 700,                     // empieza MUY suave
+  acelSuave: 2.5, acel: 14, rampa: 22,          // acel real entra a partir de ~22s
   turboMult: 1.45, turboDur: 4.5, amorDur: 8, calmaDur: 5, calmaMult: 0.55,
-  gapMin: 300, gapMax: 560,                    // hueco entre obstáculos
+  gapMin: 300, gapMax: 560, gapExtraIni: 16,    // hueco extra al principio (px por segundo restante)
+  rebotePaloma: -500, hitStopMs: 45,            // juice
   H: 480                                        // altura lógica
 };
 const GROUND = 388;
@@ -193,11 +220,16 @@ const sfx = {
   power: ()=>{beep(440,0.08,'sawtooth',0.1,220);setTimeout(()=>beep(880,0.1,'triangle',0.12),80)},
   gato:  ()=>{beep(900,0.12,'sawtooth',0.12,-350)},
   golpe: ()=>beep(120,0.25,'sawtooth',0.2,-60),
-  escudo:()=>beep(200,0.15,'square',0.15,120)
+  escudo:()=>beep(200,0.15,'square',0.15,120),
+  smash: ()=>beep(520,0.12,'square',0.12,-320),
+  pelos: ()=>{beep(880,0.05,'triangle',0.12);setTimeout(()=>beep(1320,0.06,'triangle',0.12),50)}
 };
 document.getElementById('btnMute').addEventListener('pointerdown', e=>{
   e.stopPropagation(); mute = !mute;
   document.getElementById('btnMute').textContent = mute ? '🔇' : '🔊';
+  const m = document.getElementById('musicaFondo');
+  if(mute) m.pause();
+  else if(estado === 'playing') m.play().catch(()=>{});
 });
 
 /* ================= ESTADO ================= */
@@ -207,16 +239,30 @@ let vel, distancia, puntos, huesosPartida;
 let tote, entidades, gato, frank, ella, abuelo;
 let turboT, amorT, calmaT, escudo, invulnT, sacudida;
 let proxObst, tHueso, tGato, tSalchi, tAmor, tAbuelo, peatones, tPeaton;
+let comboAereo, particulas, flotantes, estela, hitStop = 0;
+let tiendaAbierta = false;
 let record = +(localStorage.getItem('tote_record') || 0);
 let banco  = +(localStorage.getItem('tote_banco')  || 0);
+
+/* --- Tienda: collares de Tote --- */
+const COLLARES = {
+  negro:  { nombre:'Collar clásico', color:'#1c1c1c', precio:0    },
+  rojo:   { nombre:'Collar rojo',    color:'#c23b3b', precio:500  },
+  azul:   { nombre:'Collar azul',    color:'#3f6fb5', precio:800  },
+  dorado: { nombre:'Collar dorado',  color:'#ffd23f', precio:2000 }
+};
+let collaresMios = JSON.parse(localStorage.getItem('tote_collares') || '["negro"]');
+let collarSel = localStorage.getItem('tote_collar') || 'negro';
+if(!COLLARES[collarSel] || !collaresMios.includes(collarSel)) collarSel = 'negro';
 document.getElementById('record').textContent = 'RÉCORD ' + record;
 
 function reset(){
   vel = CFG.velIni; distancia = 0; puntos = 0; huesosPartida = 0; jugando = 0;
   turboT = 0; amorT = 0; calmaT = 0; escudo = false; invulnT = 0; sacudida = 0;
-  tote = { x: 95, y: GROUND, vy: 0, saltos: 0, enSuelo: true, anim: 0, muerto: false };
+  tote = { x: 95, y: GROUND, vy: 0, saltos: 0, enSuelo: true, anim: 0, muerto: false, smash: false };
   entidades = []; gato = null; frank = null; ella = null; abuelo = null;
   peatones = []; tPeaton = 2.5;
+  comboAereo = 0; particulas = []; flotantes = []; estela = []; hitStop = 0;
   proxObst = 500; tHueso = 2; tGato = rnd(10, 16); tSalchi = rnd(16, 26); tAmor = rnd(20, 30); tAbuelo = rnd(24, 36);
   actualizarHUD();
   ['bTurbo','bEscudo','bAmor','bCalma'].forEach(id=>document.getElementById(id).style.display='none');
@@ -225,8 +271,10 @@ const rnd = (a,b)=>a + Math.random()*(b-a);
 
 /* ================= CONTROLES ================= */
 function accion(){
+  if(tiendaAbierta) return;                 // la tienda gestiona sus propios toques
   if(estado === 'menu' || estado === 'gameover'){
     reset(); estado = 'playing';
+    iniciarMusica();
     document.getElementById('menu').classList.add('oculto');
     document.getElementById('gameover').classList.add('oculto');
     return;
@@ -240,8 +288,26 @@ function accion(){
     else if(tote.saltos < 2){ tote.vy = CFG.dobleSalto; tote.saltos = 2; sfx.salto(); }
   }
 }
+// ⬇️ Caída rápida (smash): cancela el salto y cae a plomo
+function caidaRapida(){
+  if(estado === 'playing' && !tote.muerto && !tote.enSuelo){
+    tote.vy = Math.max(tote.vy, CFG.caidaRapida);
+    tote.smash = true;
+    sfx.smash();
+  }
+}
 addEventListener('pointerdown', accion);
-addEventListener('keydown', e=>{ if(e.code==='Space'||e.code==='ArrowUp'){ e.preventDefault(); accion(); }});
+addEventListener('keydown', e=>{
+  if(e.code==='Space'||e.code==='ArrowUp'){ e.preventDefault(); accion(); }
+  if(e.code==='ArrowDown'){ e.preventDefault(); caidaRapida(); }
+});
+// deslizar hacia abajo en pantalla = caída rápida
+let touchY0 = null, smashHecho = false;
+addEventListener('pointerdown', e=>{ touchY0 = e.clientY; smashHecho = false; });
+addEventListener('pointermove', e=>{
+  if(touchY0 !== null && !smashHecho && e.clientY - touchY0 > 45){ smashHecho = true; caidaRapida(); }
+});
+addEventListener('pointerup', ()=>{ touchY0 = null; });
 document.addEventListener('visibilitychange', ()=>{
   if(document.hidden && estado==='playing'){
     estado='pausa'; document.getElementById('pausaScr').classList.remove('oculto');
@@ -259,7 +325,8 @@ function spawnObstaculo(){
     const alta = Math.random() < 0.55;
     entidades.push({tipo:'paloma', x, y: alta ? GROUND-96 : GROUND-42, w:44, h:26, vx: rnd(60,140), ala:0});
   }
-  proxObst = rnd(CFG.gapMin, CFG.gapMax) + vel * 0.32;
+  proxObst = rnd(CFG.gapMin, CFG.gapMax) + vel * 0.32
+           + Math.max(0, (CFG.rampa + 6 - jugando)) * CFG.gapExtraIni;   // modo enganche: mucho aire al principio
 }
 function spawnHuesos(){
   const n = Math.random()<0.4 ? 3 : 1;
@@ -297,7 +364,11 @@ function spawnGalleta(){
 function update(dt){
   jugando += dt;
   const mult = (turboT > 0 ? CFG.turboMult : 1) * (calmaT > 0 ? CFG.calmaMult : 1);
-  vel = Math.min(CFG.velMax, vel + CFG.acel*dt);
+  // los primeros segundos apenas acelera; a partir de CFG.rampa entra la aceleración real
+  const acelAhora = jugando < CFG.rampa
+    ? CFG.acelSuave
+    : CFG.acelSuave + (CFG.acel - CFG.acelSuave) * Math.min(1, (jugando - CFG.rampa)/8);
+  vel = Math.min(CFG.velMax, vel + acelAhora*dt);
   const v = vel * mult;
   distancia += v * dt;
   const pMult = (turboT>0 ? 2 : 1) * (amorT>0 ? 2 : 1);
@@ -311,10 +382,23 @@ function update(dt){
   if(sacudida>0) sacudida-=dt;
 
   // física de Tote
+  const estabaEnAire = !tote.enSuelo;
   tote.vy += CFG.gravedad*dt;
   tote.y  += tote.vy*dt;
-  if(tote.y >= GROUND){ tote.y = GROUND; tote.vy = 0; tote.enSuelo = true; tote.saltos = 0; }
+  if(tote.y >= GROUND){
+    tote.y = GROUND; tote.vy = 0; tote.enSuelo = true; tote.saltos = 0;
+    if(estabaEnAire){                                     // 💨 aterrizaje
+      puffPolvo(tote.x, GROUND);
+      if(tote.smash) sacudida = Math.max(sacudida, 0.12);
+      tote.smash = false;
+      if(comboAereo > 1) flota('COMBO x' + comboAereo, tote.x, tote.y - 95, '#7CFF6B');
+      comboAereo = 0;                                     // el combo se pierde al pisar suelo
+    }
+  }
   tote.anim += dt * (8 + v/60);
+  // 👻 estela turbo (ghosting)
+  if(turboT > 0) estela.push({ x: tote.x, y: tote.y, t: 0.26 });
+  updateFX(dt);
 
   // spawns
   proxObst -= v*dt;
@@ -357,13 +441,48 @@ function update(dt){
     // caja del objeto (los obstáculos apoyan en el suelo por y)
     const ey = (e.tipo==='paloma'||e.tipo==='hueso'||e.tipo==='salchicha'||e.tipo==='corazon'||e.tipo==='galleta') ? e.y : e.y - e.h;
     const caja = { x:e.x+4, y:ey+3, w:e.w-8, h:e.h-6 };
+
+    // 😮 Near-miss: saltar un obstáculo terrestre rozándolo (<5px) da puntos extra
+    if((e.tipo==='seto'||e.tipo==='maceta') && !e.roce && !tote.enSuelo &&
+       hb.x < caja.x+caja.w && hb.x+hb.w > caja.x){
+      const holgura = caja.y - (hb.y + hb.h);
+      if(holgura >= 0 && holgura < 5){
+        e.roce = true;
+        const pts = 15*pMult; puntos += pts;
+        flota('¡POR LOS PELOS! +' + Math.floor(pts), tote.x, tote.y - 105, '#f08ba0');
+        sfx.pelos();
+      }
+    }
+
     const choca = hb.x < caja.x+caja.w && hb.x+hb.w > caja.x && hb.y < caja.y+caja.h && hb.y+hb.h > caja.y;
     if(!choca) continue;
 
-    if(e.tipo==='hueso'){ huesosPartida++; puntos += 25*pMult; entidades.splice(i,1); sfx.hueso(); }
-    else if(e.tipo==='salchicha'){ escudo = true; document.getElementById('bEscudo').style.display='block'; entidades.splice(i,1); sfx.power(); }
-    else if(e.tipo==='corazon'){ amorT = CFG.amorDur; document.getElementById('bAmor').style.display='block'; entidades.splice(i,1); sfx.power(); }
-    else if(e.tipo==='galleta'){ calmaT = CFG.calmaDur; puntos += 40*pMult; document.getElementById('bCalma').style.display='block'; entidades.splice(i,1); sfx.power(); }
+    if(e.tipo==='hueso'){
+      huesosPartida++;
+      if(!tote.enSuelo) comboAereo++;                     // los huesos en el aire suman combo
+      const c = tote.enSuelo ? 1 : Math.max(1, comboAereo);
+      const pts = 25 * c * pMult; puntos += pts;
+      entidades.splice(i,1); sfx.hueso();
+      confeti(e.x+15, e.y+8);                             // 🎊 estallido
+      flota('+' + Math.floor(pts) + (c>1 ? ' x'+c : ''), e.x+15, e.y-8);
+    }
+    else if(e.tipo==='salchicha'){ escudo = true; document.getElementById('bEscudo').style.display='block'; entidades.splice(i,1); sfx.power();
+      hitStop = CFG.hitStopMs/1000; flota('🌭 ESCUDO', e.x+15, e.y-8, '#efe7da'); }
+    else if(e.tipo==='corazon'){ amorT = CFG.amorDur; document.getElementById('bAmor').style.display='block'; entidades.splice(i,1); sfx.power();
+      hitStop = CFG.hitStopMs/1000; flota('❤️ x2', e.x+15, e.y-8, '#e2586e'); }
+    else if(e.tipo==='galleta'){ calmaT = CFG.calmaDur; const pts = 40*pMult; puntos += pts; document.getElementById('bCalma').style.display='block'; entidades.splice(i,1); sfx.power();
+      hitStop = CFG.hitStopMs/1000; flota('+' + Math.floor(pts) + ' 🍪', e.x+15, e.y-8); }
+    else if(e.tipo==='paloma' && tote.vy > 0 && !tote.enSuelo){
+      // 🐦 ¡Aplastada estilo Mario! No muere: rebota
+      comboAereo++;
+      const c = Math.max(1, comboAereo);
+      const pts = 30 * c * pMult; puntos += pts;
+      tote.vy = CFG.rebotePaloma; tote.saltos = 1; tote.smash = false;
+      entidades.splice(i,1);
+      sfx.salto(); plumas(e.x+20, e.y+12);
+      flota('+' + Math.floor(pts) + (c>1 ? ' x'+c : ''), tote.x, tote.y - 85);
+      hitStop = CFG.hitStopMs/1000;                       // ⏸️ micro-pausa de impacto
+    }
     else if(invulnT<=0){                                  // obstáculo
       if(escudo){ escudo=false; invulnT=1.4; sacudida=0.25; document.getElementById('bEscudo').style.display='none'; entidades.splice(i,1); sfx.escudo(); }
       else return gameOver();
@@ -377,7 +496,10 @@ function actualizarHUD(){
 }
 function gameOver(){
   tote.muerto = true; estado = 'gameover'; sfx.golpe(); sacudida = 0.4;
+  hitStop = 0.09;                                   // impacto gordo
+  document.getElementById('musicaFondo').pause();
   banco += huesosPartida; localStorage.setItem('tote_banco', banco);
+  document.getElementById('menuBanco').textContent = banco;
   const p = Math.floor(puntos);
   const nuevo = p > record;
   if(nuevo){ record = p; localStorage.setItem('tote_record', record); }
@@ -389,6 +511,61 @@ function gameOver(){
   document.getElementById('nuevoRecord').style.display = nuevo ? 'block' : 'none';
   if(fb.listo) fb.guardar(p);
   setTimeout(()=>document.getElementById('gameover').classList.remove('oculto'), 450);
+}
+
+/* ================= JUICE / FX ✨ ================= */
+function puffPolvo(x, y){                                  // 💨 nubecilla al aterrizar
+  for(let i=0;i<8;i++) particulas.push({ x:x+rnd(-16,16), y:y-2, vx:rnd(-70,-10), vy:rnd(-75,-10),
+    r:rnd(3,6), t:rnd(0.28,0.5), g:0, tipo:'polvo' });
+}
+function confeti(x, y){                                    // 🎊 al coger un hueso
+  const cols = ['#ffd23f','#f08ba0','#7CFF6B','#5aa7c9','#e2586e'];
+  for(let i=0;i<14;i++) particulas.push({ x, y, vx:rnd(-160,160), vy:rnd(-260,-60),
+    r:rnd(2,4), t:rnd(0.4,0.7), g:900, col:cols[i%5], tipo:'chispa' });
+}
+function plumas(x, y){                                     // 🐦 al aplastar una paloma
+  for(let i=0;i<10;i++) particulas.push({ x, y, vx:rnd(-130,130), vy:rnd(-190,-30),
+    r:rnd(2,4), t:rnd(0.3,0.6), g:420, col:'#9aa0ad', tipo:'chispa' });
+}
+function flota(txt, x, y, col='#ffd23f'){                  // 🔤 marcador flotante
+  flotantes.push({ txt, x, y, t:0.9, col });
+}
+function updateFX(dt){
+  for(let i=particulas.length-1;i>=0;i--){ const p = particulas[i];
+    p.t -= dt; if(p.t<=0){ particulas.splice(i,1); continue; }
+    p.x += p.vx*dt; p.y += p.vy*dt; if(p.g) p.vy += p.g*dt; }
+  if(particulas.length > 90) particulas.splice(0, particulas.length-90);   // tope por FPS
+  for(let i=flotantes.length-1;i>=0;i--){ const f = flotantes[i];
+    f.t -= dt; f.y -= 55*dt; if(f.t<=0) flotantes.splice(i,1); }
+  for(let i=estela.length-1;i>=0;i--){ const s = estela[i];
+    s.t -= dt; if(s.t<=0) estela.splice(i,1); }
+  if(estela.length > 12) estela.splice(0, estela.length-12);
+}
+function dibujaEstela(){                                    // 👻 ghosting del turbo
+  for(const s of estela){
+    ctx.globalAlpha = Math.max(0, s.t) * 1.6;
+    ctx.fillStyle = 'rgba(59,50,48,0.45)';
+    ctx.beginPath(); ctx.ellipse(s.x-2,  s.y-30, 34, 20, 0, 0, 7); ctx.fill();
+    ctx.beginPath(); ctx.ellipse(s.x+32, s.y-46, 20, 17, 0, 0, 7); ctx.fill();
+  }
+  ctx.globalAlpha = 1;
+}
+function dibujaFX(){
+  for(const p of particulas){
+    ctx.globalAlpha = Math.min(1, p.t*2.2);
+    ctx.fillStyle = p.tipo==='polvo' ? 'rgba(222,214,190,0.9)' : p.col;
+    ctx.beginPath(); ctx.arc(p.x, p.y, p.r, 0, 7); ctx.fill();
+  }
+  ctx.globalAlpha = 1;
+  ctx.font = '10px "Press Start 2P"'; ctx.textAlign = 'center';
+  for(const f of flotantes){
+    ctx.globalAlpha = Math.min(1, f.t*1.7);
+    ctx.fillStyle = f.col;
+    ctx.strokeStyle = 'rgba(0,0,0,0.6)'; ctx.lineWidth = 3;
+    ctx.strokeText(f.txt, f.x, f.y);
+    ctx.fillText(f.txt, f.x, f.y);
+  }
+  ctx.globalAlpha = 1; ctx.textAlign = 'left';
 }
 
 /* ================= DIBUJO ================= */
@@ -513,8 +690,8 @@ function dibujaTote(){
   ctx.beginPath(); ctx.ellipse(-12,-18,3,4,-0.5,0,7); ctx.fill();
   ctx.restore();
 
-  // collar negro con chapita
-  ctx.strokeStyle = '#1c1c1c'; ctx.lineWidth = 6;
+  // collar (color de la tienda 🛍️) con chapita
+  ctx.strokeStyle = COLLARES[collarSel].color; ctx.lineWidth = 6;
   ctx.beginPath(); ctx.moveTo(22,-40); ctx.lineTo(30,-26); ctx.stroke();
   ctx.fillStyle = '#c8c8c8'; ctx.beginPath(); ctx.arc(28,-22,4,0,7); ctx.fill();
   ctx.restore();
@@ -677,7 +854,9 @@ function render(){
   dibujaPersona(abuelo, 'abuelo');
   dibujaEntidades();
   dibujaGato();
+  dibujaEstela();
   dibujaTote();
+  dibujaFX();
   ctx.restore();
 }
 
@@ -686,12 +865,60 @@ let ultimoT = performance.now();
 function loop(t){
   const dt = Math.min((t - ultimoT)/1000, 0.05);
   ultimoT = t;
+  if(hitStop > 0){ hitStop -= dt; render(); requestAnimationFrame(loop); return; }  // ⏸️ micro-pausa de impacto
   if(estado === 'playing') update(dt);
   if(estado !== 'menu' || true) render();
   requestAnimationFrame(loop);
 }
 reset(); render();
 requestAnimationFrame(loop);
+
+/* ================= TIENDA 🛍️ ================= */
+function pintaTienda(){
+  document.getElementById('tiendaBanco').textContent = banco;
+  document.getElementById('menuBanco').textContent = banco;
+  const cont = document.getElementById('tiendaItems'); cont.innerHTML = '';
+  for(const id in COLLARES){
+    const c = COLLARES[id], mio = collaresMios.includes(id), puesto = collarSel === id;
+    const fila = document.createElement('div'); fila.className = 'item';
+    const b = document.createElement('button');
+    if(puesto){ b.textContent = '✔ Puesto'; b.className = 'puesto'; b.disabled = true; }
+    else if(mio){ b.textContent = 'Poner'; }
+    else { b.textContent = '🦴 ' + c.precio; b.disabled = banco < c.precio; }
+    b.addEventListener('pointerdown', ev=>{
+      ev.stopPropagation();
+      if(!mio){
+        if(banco < c.precio) return;
+        banco -= c.precio; collaresMios.push(id);
+        localStorage.setItem('tote_banco', banco);
+        localStorage.setItem('tote_collares', JSON.stringify(collaresMios));
+        sfx.hueso();
+      }
+      collarSel = id; localStorage.setItem('tote_collar', id);
+      pintaTienda();
+    });
+    fila.innerHTML = `<span class="bola" style="background:${c.color}"></span><span class="nom">${c.nombre}</span>`;
+    fila.appendChild(b);
+    cont.appendChild(fila);
+  }
+}
+document.getElementById('btnTienda').addEventListener('pointerdown', e=>{
+  e.stopPropagation(); tiendaAbierta = true; pintaTienda();
+  document.getElementById('tienda').classList.remove('oculto');
+});
+document.getElementById('btnCerrarTienda').addEventListener('pointerdown', e=>{
+  e.stopPropagation();
+  document.getElementById('tienda').classList.add('oculto');
+  setTimeout(()=>{ tiendaAbierta = false; }, 80);   // evita que el mismo toque arranque la partida
+});
+pintaTienda();
+
+/* ================= MÚSICA 🎵 ================= */
+const musica = document.getElementById('musicaFondo');
+musica.volume = 0.35;
+function iniciarMusica(){
+  if(!mute) musica.play().catch(()=>{});   // si no hay musica.mp3, no pasa nada
+}
 
 /* ================= FIREBASE (récords online) ================= */
 const fb = { listo:false, user:null,
@@ -708,6 +935,7 @@ const fb = { listo:false, user:null,
       this.user = u;
       document.getElementById('quien').textContent = u ? '👋 ' + (u.displayName||'').split(' ')[0] : '';
       document.getElementById('btnLogin').style.display = u ? 'none' : '';
+      if(u) this.top();                       // al entrar, carga el Top 10 directamente
     });
     document.getElementById('btnLogin').addEventListener('pointerdown', e=>{
       e.stopPropagation();
@@ -715,18 +943,24 @@ const fb = { listo:false, user:null,
     });
   },
   async guardar(p){
-    if(!this.user) return this.top();
-    const ref = firebase.firestore().collection('toteRunner').doc(this.user.uid);
-    const doc = await ref.get();
-    if(!doc.exists || (doc.data().puntos||0) < p)
-      await ref.set({ nombre:(this.user.displayName||'Anónimo').split(' ')[0], puntos:p, fecha:new Date() });
-    this.top();
+    try{
+      if(!this.user) return this.top();
+      const ref = firebase.firestore().collection('toteRunner').doc(this.user.uid);
+      const doc = await ref.get();
+      if(!doc.exists || (doc.data().puntos||0) < p)
+        await ref.set({ nombre:(this.user.displayName||'Anónimo').split(' ')[0], puntos:p, fecha:new Date() });
+      this.top();
+    }catch(e){ console.warn('toteRunner: no se pudo guardar el récord', e); }
   },
   async top(){
-    const snap = await firebase.firestore().collection('toteRunner').orderBy('puntos','desc').limit(10).get();
-    const lb = document.getElementById('lb'); lb.innerHTML='<b>🏆 Top 10</b>'; lb.style.display='block';
-    let i=1; snap.forEach(d=>{ const x=d.data();
-      lb.innerHTML += `<li>${i++}. ${x.nombre} — ${x.puntos}</li>`; });
+    if(!this.listo) return;
+    try{
+      const snap = await firebase.firestore().collection('toteRunner').orderBy('puntos','desc').limit(10).get();
+      const lb = document.getElementById('lb'); lb.innerHTML='<b>🏆 Top 10</b>'; lb.style.display='block';
+      let i=1; snap.forEach(d=>{ const x=d.data();
+        const yo = this.user && d.id === this.user.uid;
+        lb.innerHTML += `<li${yo?' style="color:#7CFF6B"':''}>${i++}. ${x.nombre} — ${x.puntos}${yo?' ← tú':''}</li>`; });
+    }catch(e){ console.warn('toteRunner: no se pudo leer el top', e); }
   }
 };
 fb.init();

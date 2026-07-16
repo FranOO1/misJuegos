@@ -1,1 +1,801 @@
 
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<meta name="theme-color" content="#2b1d4e">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Tote Runner">
+<title>Tote Runner 🦴</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&family=Nunito:wght@600;800&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --cielo1:#2b1d4e; --cielo2:#7a3b6e; --cielo3:#ff9a5c;
+    --hueso:#f5e8c8; --rosa:#f08ba0; --verde:#2f6631;
+  }
+  *{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+  html,body{height:100%;overflow:hidden;background:var(--cielo1);touch-action:manipulation;
+    font-family:'Nunito',system-ui,sans-serif;color:var(--hueso);user-select:none;-webkit-user-select:none}
+  #wrap{position:fixed;inset:0}
+  canvas{display:block;width:100%;height:100%}
+  .pix{font-family:'Press Start 2P',monospace}
+
+  /* ---- HUD ---- */
+  #hud{position:fixed;top:calc(env(safe-area-inset-top,0px) + 10px);left:0;right:0;
+    display:flex;justify-content:space-between;align-items:flex-start;padding:0 14px;pointer-events:none}
+  #hudL{display:flex;gap:8px;pointer-events:auto}
+  #hudR{text-align:right}
+  #score{font-size:20px;text-shadow:2px 2px 0 rgba(0,0,0,.45)}
+  #record{font-size:9px;opacity:.85;margin-top:6px;text-shadow:1px 1px 0 rgba(0,0,0,.45)}
+  #huesos{font-size:12px;margin-top:6px;text-shadow:1px 1px 0 rgba(0,0,0,.45)}
+  .chip{background:rgba(0,0,0,.35);border:2px solid rgba(245,232,200,.5);border-radius:12px;
+    width:40px;height:40px;font-size:18px;display:grid;place-items:center;color:var(--hueso)}
+  #estado{position:fixed;top:calc(env(safe-area-inset-top,0px) + 62px);left:14px;display:flex;flex-direction:column;gap:4px;pointer-events:none}
+  .buff{font-size:9px;background:rgba(0,0,0,.4);border-radius:8px;padding:5px 8px;display:none}
+
+  /* ---- Banner gato ---- */
+  #banner{position:fixed;top:26%;left:0;right:0;text-align:center;font-size:clamp(16px,5vw,28px);
+    color:#ffd23f;text-shadow:3px 3px 0 #a3320b;pointer-events:none;opacity:0;transform:scale(.6);
+    transition:opacity .15s,transform .2s cubic-bezier(.34,1.56,.64,1)}
+  #banner.on{opacity:1;transform:scale(1)}
+  #bannerSub{font-family:'Nunito';font-weight:800;font-size:.55em;display:block;margin-top:10px;color:var(--hueso);text-shadow:2px 2px 0 rgba(0,0,0,.5)}
+
+  /* ---- Pantallas ---- */
+  .screen{position:fixed;inset:0;display:grid;place-items:center;background:rgba(24,14,48,.72);
+    backdrop-filter:blur(3px);z-index:10}
+  .panel{text-align:center;padding:28px 22px;max-width:420px;width:88%}
+  #titulo{font-size:clamp(22px,7vw,40px);line-height:1.35;color:var(--hueso);
+    text-shadow:0 4px 0 #a3320b, 0 8px 18px rgba(0,0,0,.5)}
+  #titulo .t2{color:#ffd23f}
+  .sub{font-weight:800;font-size:15px;margin-top:16px;opacity:.95}
+  .howto{margin-top:18px;font-size:13px;font-weight:600;line-height:1.9;background:rgba(0,0,0,.3);
+    border-radius:14px;padding:12px 14px;text-align:left}
+  .tap{margin-top:22px;font-size:11px;animation:parp 1.1s infinite}
+  @keyframes parp{50%{opacity:.25}}
+  #goTitulo{font-size:clamp(18px,6vw,30px);color:var(--rosa);text-shadow:0 3px 0 rgba(0,0,0,.5)}
+  .stat{font-size:13px;margin-top:14px}
+  .stat b{color:#ffd23f;font-size:17px}
+  #nuevoRecord{display:none;margin-top:14px;font-size:12px;color:#7CFF6B;text-shadow:1px 1px 0 rgba(0,0,0,.6);animation:parp .8s infinite}
+  #pausa{display:none}
+  button.btn{pointer-events:auto;margin-top:18px;font-family:'Nunito';font-weight:800;font-size:14px;
+    background:var(--hueso);color:#3b2a1a;border:0;border-radius:14px;padding:12px 20px;box-shadow:0 4px 0 #b09b6f;cursor:pointer}
+  button.btn:active{transform:translateY(3px);box-shadow:0 1px 0 #b09b6f}
+  #authBar{margin-top:14px;font-size:12px;font-weight:700;opacity:.9}
+  #lb{margin-top:14px;text-align:left;font-size:12px;font-weight:700;display:none;background:rgba(0,0,0,.3);border-radius:12px;padding:10px 14px;max-height:32vh;overflow:auto}
+  #lb li{margin:6px 0;list-style:none}
+  .oculto{display:none!important}
+</style>
+</head>
+<body>
+<div id="wrap"><canvas id="cv"></canvas></div>
+
+<!-- HUD -->
+<div id="hud">
+  <div id="hudL"><div class="chip" id="btnMute">🔊</div></div>
+  <div id="hudR">
+    <div id="score" class="pix">0</div>
+    <div id="huesos">🦴 0</div>
+    <div id="record" class="pix">RÉCORD 0</div>
+  </div>
+</div>
+<div id="estado">
+  <div class="buff" id="bTurbo">🐱 ¡TURBO! x2 puntos</div>
+  <div class="buff" id="bEscudo">🌭 Escudo de Frank</div>
+  <div class="buff" id="bAmor">❤️ Caricias x2</div>
+  <div class="buff" id="bCalma">🍪 Calma del abuelo</div>
+</div>
+<div id="banner" class="pix">¡GATO! 🐱<span id="bannerSub">¡Tote se vuelve loco!</span></div>
+
+<!-- MENÚ -->
+<div class="screen" id="menu">
+  <div class="panel">
+    <div id="titulo" class="pix">TOTE<br><span class="t2">RUNNER</span></div>
+    <div class="sub">Tote, 12 años de staffy bueno 🐶<br>persiguiendo todo lo que se mueve</div>
+    <div class="howto">
+      👆 Toca para saltar · doble toque = doble salto<br>
+      🐦 Ojo con las palomas: ¡a veces NO hay que saltar!<br>
+      🐱 Si aparece un gato… agárrate: modo TURBO<br>
+      🌭 Frank te lanza salchichas = escudo<br>
+      ❤️ Ella te da caricias = puntos x2<br>
+      🍪 El abuelo te da una galleta = todo va más lento
+    </div>
+    <div id="authBar" class="oculto">
+      <button class="btn" id="btnLogin">🔑 Entrar con Google</button>
+      <div id="quien"></div>
+    </div>
+    <div class="tap pix">— TOCA PARA EMPEZAR —</div>
+  </div>
+</div>
+
+<!-- GAME OVER -->
+<div class="screen oculto" id="gameover">
+  <div class="panel">
+    <div id="goTitulo" class="pix">¡AY, TOTE!</div>
+    <div class="stat pix">PUNTOS <b id="goScore">0</b></div>
+    <div class="stat pix">RÉCORD <b id="goRecord">0</b></div>
+    <div class="stat">🦴 Huesos de la partida: <b id="goHuesos">0</b> · Hucha total: <b id="goBanco">0</b></div>
+    <div id="nuevoRecord" class="pix">★ ¡NUEVO RÉCORD! ★</div>
+    <ol id="lb"></ol>
+    <div class="tap pix">— TOCA PARA REINTENTAR —</div>
+  </div>
+</div>
+
+<!-- PAUSA -->
+<div class="screen oculto" id="pausaScr">
+  <div class="panel"><div class="pix" style="font-size:18px">PAUSA</div>
+  <div class="tap pix">— TOCA PARA SEGUIR —</div></div>
+</div>
+
+<script>
+/* ============================================================
+   🔥 FIREBASE (opcional) — para récords online + login Google
+   ------------------------------------------------------------
+   1) En https://console.firebase.google.com crea (o reutiliza)
+      un proyecto, activa Authentication > Google y Firestore.
+   2) Pega aquí tu firebaseConfig y pon ENABLE_FIREBASE = true.
+   3) Regla Firestore sugerida (colección "toteRunner"):
+      match /toteRunner/{uid} {
+        allow read: if true;
+        allow write: if request.auth != null && request.auth.uid == uid;
+      }
+   ============================================================ */
+const ENABLE_FIREBASE = false;
+const firebaseConfig = {
+  apiKey: "PEGA_AQUI",
+  authDomain: "TU_PROYECTO.firebaseapp.com",
+  projectId: "TU_PROYECTO",
+  appId: "PEGA_AQUI"
+};
+
+/* ================= CONFIG DEL JUEGO ================= */
+const CFG = {
+  gravedad: 2600, salto: -880, dobleSalto: -800,
+  velIni: 300, velMax: 700, acel: 7,           // px/s, px/s²
+  turboMult: 1.45, turboDur: 4.5, amorDur: 8, calmaDur: 5, calmaMult: 0.55,
+  gapMin: 300, gapMax: 560,                    // hueco entre obstáculos
+  H: 480                                        // altura lógica
+};
+const GROUND = 388;
+
+/* ================= CANVAS ================= */
+const cv = document.getElementById('cv'), ctx = cv.getContext('2d');
+let W = 0, H = CFG.H, escala = 1;
+function resize(){
+  const dpr = Math.min(window.devicePixelRatio || 1, 2);
+  cv.width  = innerWidth * dpr; cv.height = innerHeight * dpr;
+  escala = (innerHeight * dpr) / CFG.H;
+  W = cv.width / escala;
+  ctx.setTransform(escala, 0, 0, escala, 0, 0);
+  ctx.imageSmoothingEnabled = true;
+}
+addEventListener('resize', resize); resize();
+
+/* ================= AUDIO ================= */
+let mute = false, AC = null;
+function beep(f, dur=0.08, tipo='square', vol=0.12, slide=0){
+  if(mute) return;
+  try{
+    AC = AC || new (window.AudioContext||window.webkitAudioContext)();
+    const o = AC.createOscillator(), g = AC.createGain();
+    o.type = tipo; o.frequency.value = f;
+    if(slide) o.frequency.linearRampToValueAtTime(f+slide, AC.currentTime+dur);
+    g.gain.value = vol; g.gain.exponentialRampToValueAtTime(0.001, AC.currentTime+dur);
+    o.connect(g); g.connect(AC.destination); o.start(); o.stop(AC.currentTime+dur);
+  }catch(e){}
+}
+const sfx = {
+  salto: ()=>beep(300,0.09,'square',0.1,180),
+  hueso: ()=>{beep(660,0.06,'triangle',0.14);setTimeout(()=>beep(990,0.07,'triangle',0.14),60)},
+  power: ()=>{beep(440,0.08,'sawtooth',0.1,220);setTimeout(()=>beep(880,0.1,'triangle',0.12),80)},
+  gato:  ()=>{beep(900,0.12,'sawtooth',0.12,-350)},
+  golpe: ()=>beep(120,0.25,'sawtooth',0.2,-60),
+  escudo:()=>beep(200,0.15,'square',0.15,120)
+};
+document.getElementById('btnMute').addEventListener('pointerdown', e=>{
+  e.stopPropagation(); mute = !mute;
+  document.getElementById('btnMute').textContent = mute ? '🔇' : '🔊';
+});
+
+/* ================= ESTADO ================= */
+let estado = 'menu';           // menu | playing | gameover | pausa
+let t0 = 0, jugando = 0;       // tiempo de partida
+let vel, distancia, puntos, huesosPartida;
+let tote, entidades, gato, frank, ella, abuelo;
+let turboT, amorT, calmaT, escudo, invulnT, sacudida;
+let proxObst, tHueso, tGato, tSalchi, tAmor, tAbuelo, peatones, tPeaton;
+let record = +(localStorage.getItem('tote_record') || 0);
+let banco  = +(localStorage.getItem('tote_banco')  || 0);
+document.getElementById('record').textContent = 'RÉCORD ' + record;
+
+function reset(){
+  vel = CFG.velIni; distancia = 0; puntos = 0; huesosPartida = 0; jugando = 0;
+  turboT = 0; amorT = 0; calmaT = 0; escudo = false; invulnT = 0; sacudida = 0;
+  tote = { x: 95, y: GROUND, vy: 0, saltos: 0, enSuelo: true, anim: 0, muerto: false };
+  entidades = []; gato = null; frank = null; ella = null; abuelo = null;
+  peatones = []; tPeaton = 2.5;
+  proxObst = 500; tHueso = 2; tGato = rnd(10, 16); tSalchi = rnd(16, 26); tAmor = rnd(20, 30); tAbuelo = rnd(24, 36);
+  actualizarHUD();
+  ['bTurbo','bEscudo','bAmor','bCalma'].forEach(id=>document.getElementById(id).style.display='none');
+}
+const rnd = (a,b)=>a + Math.random()*(b-a);
+
+/* ================= CONTROLES ================= */
+function accion(){
+  if(estado === 'menu' || estado === 'gameover'){
+    reset(); estado = 'playing';
+    document.getElementById('menu').classList.add('oculto');
+    document.getElementById('gameover').classList.add('oculto');
+    return;
+  }
+  if(estado === 'pausa'){
+    estado = 'playing'; document.getElementById('pausaScr').classList.add('oculto');
+    ultimoT = performance.now(); return;
+  }
+  if(estado === 'playing' && !tote.muerto){
+    if(tote.enSuelo){ tote.vy = CFG.salto; tote.enSuelo = false; tote.saltos = 1; sfx.salto(); }
+    else if(tote.saltos < 2){ tote.vy = CFG.dobleSalto; tote.saltos = 2; sfx.salto(); }
+  }
+}
+addEventListener('pointerdown', accion);
+addEventListener('keydown', e=>{ if(e.code==='Space'||e.code==='ArrowUp'){ e.preventDefault(); accion(); }});
+document.addEventListener('visibilitychange', ()=>{
+  if(document.hidden && estado==='playing'){
+    estado='pausa'; document.getElementById('pausaScr').classList.remove('oculto');
+  }
+});
+
+/* ================= SPAWNS ================= */
+function spawnObstaculo(){
+  const r = Math.random();
+  const x = W + 60;
+  if(r < 0.30)      entidades.push({tipo:'seto',   x, y:GROUND, w:64, h:40});
+  else if(r < 0.55) entidades.push({tipo:'charco', x, y:GROUND, w:110, h:10});
+  else if(r < 0.75) entidades.push({tipo:'maceta', x, y:GROUND, w:36, h:42});
+  else {            // paloma: alta (no saltes) o baja (salta ya)
+    const alta = Math.random() < 0.55;
+    entidades.push({tipo:'paloma', x, y: alta ? GROUND-96 : GROUND-42, w:44, h:26, vx: rnd(60,140), ala:0});
+  }
+  proxObst = rnd(CFG.gapMin, CFG.gapMax) + vel * 0.32;
+}
+function spawnHuesos(){
+  const n = Math.random()<0.4 ? 3 : 1;
+  const enAire = Math.random()<0.45;
+  for(let i=0;i<n;i++)
+    entidades.push({tipo:'hueso', x: W+80 + i*46, y: enAire ? GROUND-120 - Math.sin(i)*14 : GROUND-26, w:30, h:16, fase: Math.random()*6});
+  tHueso = rnd(1.6, 3.4);
+}
+function spawnGato(){
+  gato = { x: W+40, anim: 0 };
+  turboT = CFG.turboDur;
+  document.getElementById('banner').classList.add('on');
+  document.getElementById('bTurbo').style.display='block';
+  sfx.gato();
+  setTimeout(()=>document.getElementById('banner').classList.remove('on'), 1600);
+  tGato = rnd(14, 24);
+}
+function spawnSalchicha(){
+  frank = { x: W+30 };
+  entidades.push({tipo:'salchicha', x: W+110, y: GROUND-100, w:34, h:16, fase:0});
+  tSalchi = rnd(22, 36);
+}
+function spawnAmor(){
+  ella = { x: W+30 };
+  entidades.push({tipo:'corazon', x: W+105, y: GROUND-105, w:26, h:24, fase:0});
+  tAmor = rnd(26, 40);
+}
+function spawnGalleta(){
+  abuelo = { x: W+30 };
+  entidades.push({tipo:'galleta', x: W+105, y: GROUND-98, w:26, h:26, fase:0});
+  tAbuelo = rnd(30, 46);
+}
+
+/* ================= UPDATE ================= */
+function update(dt){
+  jugando += dt;
+  const mult = (turboT > 0 ? CFG.turboMult : 1) * (calmaT > 0 ? CFG.calmaMult : 1);
+  vel = Math.min(CFG.velMax, vel + CFG.acel*dt);
+  const v = vel * mult;
+  distancia += v * dt;
+  const pMult = (turboT>0 ? 2 : 1) * (amorT>0 ? 2 : 1);
+  puntos += v * dt * 0.055 * pMult;
+
+  // temporizadores de buffs
+  if(turboT>0){ turboT-=dt; if(turboT<=0) document.getElementById('bTurbo').style.display='none'; }
+  if(amorT >0){ amorT -=dt; if(amorT <=0) document.getElementById('bAmor' ).style.display='none'; }
+  if(calmaT>0){ calmaT-=dt; if(calmaT<=0) document.getElementById('bCalma').style.display='none'; }
+  if(invulnT>0) invulnT-=dt;
+  if(sacudida>0) sacudida-=dt;
+
+  // física de Tote
+  tote.vy += CFG.gravedad*dt;
+  tote.y  += tote.vy*dt;
+  if(tote.y >= GROUND){ tote.y = GROUND; tote.vy = 0; tote.enSuelo = true; tote.saltos = 0; }
+  tote.anim += dt * (8 + v/60);
+
+  // spawns
+  proxObst -= v*dt;
+  if(proxObst <= 0) spawnObstaculo();
+  tHueso -= dt; if(tHueso<=0) spawnHuesos();
+  if(jugando > 8){ tGato -= dt; if(tGato<=0 && !gato) spawnGato(); }
+  tSalchi -= dt; if(tSalchi<=0) spawnSalchicha();
+  tAmor  -= dt; if(tAmor <=0) spawnAmor();
+  if(jugando > 20){ tAbuelo -= dt; if(tAbuelo<=0) spawnGalleta(); }
+
+  // gato cruzando (más rápido que el mundo)
+  if(gato){ gato.x -= (v + 240)*dt; gato.anim += dt*14; if(gato.x < -80) gato = null; }
+  if(frank){ frank.x -= v*dt; if(frank.x < -120) frank = null; }
+  if(ella){  ella.x  -= v*dt; if(ella.x  < -120) ella  = null; }
+  if(abuelo){ abuelo.x -= v*dt; if(abuelo.x < -120) abuelo = null; }
+
+  // pandilla y vecinos paseando por el fondo (sin colisión)
+  tPeaton -= dt;
+  if(tPeaton <= 0){
+    const tipos = ['frank','ella','abuelo','senyora','chico'];
+    peatones.push({ tipo: tipos[Math.floor(Math.random()*tipos.length)], x: W+70, paso: Math.random()*6 });
+    tPeaton = rnd(3.5, 7.5);
+  }
+  for(let i = peatones.length-1; i >= 0; i--){
+    const pt = peatones[i];
+    pt.x -= (v - 30)*dt;               // van andando, un pelín más lentos que el mundo
+    pt.paso += dt*7;
+    if(pt.x < -90) peatones.splice(i,1);
+  }
+
+  // entidades
+  const hb = { x: tote.x-30, y: tote.y-52, w: 64, h: 50 };   // hitbox de Tote
+  for(let i = entidades.length-1; i >= 0; i--){
+    const e = entidades[i];
+    e.x -= v*dt;
+    if(e.tipo==='paloma'){ e.x -= e.vx*dt; e.ala += dt*16; }
+    if(e.fase !== undefined) e.fase += dt*4;
+    if(e.x < -160){ entidades.splice(i,1); continue; }
+
+    // caja del objeto (los obstáculos apoyan en el suelo por y)
+    const ey = (e.tipo==='paloma'||e.tipo==='hueso'||e.tipo==='salchicha'||e.tipo==='corazon'||e.tipo==='galleta') ? e.y : e.y - e.h;
+    const caja = { x:e.x+4, y:ey+3, w:e.w-8, h:e.h-6 };
+    const choca = hb.x < caja.x+caja.w && hb.x+hb.w > caja.x && hb.y < caja.y+caja.h && hb.y+hb.h > caja.y;
+    if(!choca) continue;
+
+    if(e.tipo==='hueso'){ huesosPartida++; puntos += 25*pMult; entidades.splice(i,1); sfx.hueso(); }
+    else if(e.tipo==='salchicha'){ escudo = true; document.getElementById('bEscudo').style.display='block'; entidades.splice(i,1); sfx.power(); }
+    else if(e.tipo==='corazon'){ amorT = CFG.amorDur; document.getElementById('bAmor').style.display='block'; entidades.splice(i,1); sfx.power(); }
+    else if(e.tipo==='galleta'){ calmaT = CFG.calmaDur; puntos += 40*pMult; document.getElementById('bCalma').style.display='block'; entidades.splice(i,1); sfx.power(); }
+    else if(invulnT<=0){                                  // obstáculo
+      if(escudo){ escudo=false; invulnT=1.4; sacudida=0.25; document.getElementById('bEscudo').style.display='none'; entidades.splice(i,1); sfx.escudo(); }
+      else return gameOver();
+    }
+  }
+  actualizarHUD();
+}
+function actualizarHUD(){
+  document.getElementById('score').textContent  = Math.floor(puntos);
+  document.getElementById('huesos').textContent = '🦴 ' + huesosPartida;
+}
+function gameOver(){
+  tote.muerto = true; estado = 'gameover'; sfx.golpe(); sacudida = 0.4;
+  banco += huesosPartida; localStorage.setItem('tote_banco', banco);
+  const p = Math.floor(puntos);
+  const nuevo = p > record;
+  if(nuevo){ record = p; localStorage.setItem('tote_record', record); }
+  document.getElementById('record').textContent  = 'RÉCORD ' + record;
+  document.getElementById('goScore').textContent  = p;
+  document.getElementById('goRecord').textContent = record;
+  document.getElementById('goHuesos').textContent = huesosPartida;
+  document.getElementById('goBanco').textContent  = banco;
+  document.getElementById('nuevoRecord').style.display = nuevo ? 'block' : 'none';
+  if(fb.listo) fb.guardar(p);
+  setTimeout(()=>document.getElementById('gameover').classList.remove('oculto'), 450);
+}
+
+/* ================= DIBUJO ================= */
+function fondo(){
+  // cielo atardecer (como su parque)
+  const g = ctx.createLinearGradient(0,0,0,GROUND);
+  g.addColorStop(0,'#2b1d4e'); g.addColorStop(0.55,'#7a3b6e'); g.addColorStop(1,'#ff9a5c');
+  ctx.fillStyle = g; ctx.fillRect(0,0,W,GROUND);
+  // luna
+  ctx.fillStyle = '#f7ecd6'; ctx.beginPath(); ctx.arc(W*0.82, 70, 22, 0, 7); ctx.fill();
+  ctx.fillStyle = 'rgba(43,29,78,0.35)'; ctx.beginPath(); ctx.arc(W*0.82+8, 64, 18, 0, 7); ctx.fill();
+  // árboles lejanos (parallax)
+  const off1 = (distancia*0.25) % 260;
+  ctx.fillStyle = '#3d2a52';
+  for(let x = -off1; x < W+130; x += 260){
+    ctx.fillRect(x+58, GROUND-105, 10, 105);
+    ctx.beginPath(); ctx.arc(x+63, GROUND-118, 42, 0, 7); ctx.fill();
+  }
+  // farolas encendidas (parallax medio)
+  const off2 = (distancia*0.55) % 420;
+  for(let x = -off2; x < W+80; x += 420){
+    ctx.fillStyle = '#241b30'; ctx.fillRect(x+120, GROUND-150, 7, 150);
+    ctx.fillStyle = '#ffd98a';
+    ctx.beginPath(); ctx.arc(x+123, GROUND-155, 9, 0, 7); ctx.fill();
+    const glow = ctx.createRadialGradient(x+123, GROUND-155, 4, x+123, GROUND-155, 46);
+    glow.addColorStop(0,'rgba(255,217,138,0.4)'); glow.addColorStop(1,'rgba(255,217,138,0)');
+    ctx.fillStyle = glow; ctx.beginPath(); ctx.arc(x+123, GROUND-155, 46, 0, 7); ctx.fill();
+  }
+  // bancos del parque (decorativos, Tote pasa por delante sin chocar)
+  const offB = (distancia) % 680;
+  for(let x = -offB; x < W+120; x += 680){
+    ctx.fillStyle = '#54382a';
+    ctx.fillRect(x+300, GROUND-42, 92, 9);          // respaldo
+    ctx.fillRect(x+300, GROUND-28, 92, 8);          // asiento
+    ctx.fillRect(x+307, GROUND-20, 7, 20);          // patas
+    ctx.fillRect(x+378, GROUND-20, 7, 20);
+    ctx.fillStyle = '#3d2a1f';
+    ctx.fillRect(x+300, GROUND-42, 92, 3);
+  }
+  // suelo de césped
+  ctx.fillStyle = '#2f6631'; ctx.fillRect(0, GROUND, W, H-GROUND);
+  ctx.fillStyle = '#3a7d3c'; ctx.fillRect(0, GROUND, W, 8);
+  // tréboles / florecillas
+  const off3 = (distancia) % 90;
+  ctx.fillStyle = '#dfe8cf';
+  for(let x = -off3; x < W; x += 90){
+    ctx.beginPath(); ctx.arc(x+30, GROUND+30, 3, 0, 7); ctx.fill();
+    ctx.beginPath(); ctx.arc(x+70, GROUND+58, 2.5, 0, 7); ctx.fill();
+  }
+  // diente de león (guiño a la foto)
+  ctx.fillStyle = '#ffd23f';
+  for(let x = -(distancia%310); x < W; x += 310){ ctx.beginPath(); ctx.arc(x+150, GROUND+44, 4, 0, 7); ctx.fill(); }
+}
+
+function dibujaTote(){
+  const t = tote, corre = t.enSuelo && !t.muerto;
+  const f = Math.sin(t.anim*2);                    // ciclo de patas
+  ctx.save();
+  ctx.translate(t.x, t.y);
+  if(!t.enSuelo) ctx.rotate(-0.12);
+  if(t.muerto) ctx.rotate(0.35);
+
+  // aura de escudo
+  if(escudo){ ctx.strokeStyle='rgba(255,210,63,.8)'; ctx.lineWidth=3; ctx.beginPath(); ctx.arc(0,-30,46,0,7); ctx.stroke(); }
+  // destellos turbo
+  if(turboT>0){ ctx.fillStyle='rgba(255,210,63,.5)';
+    for(let i=0;i<3;i++) ctx.fillRect(-52-i*14, -34+Math.sin(t.anim*3+i)*10, 10, 4); }
+  if(invulnT>0 && Math.floor(invulnT*12)%2) ctx.globalAlpha = 0.4;
+
+  // patas (atigrado oscuro, calcetines claros)
+  ctx.lineWidth = 9; ctx.lineCap = 'round'; ctx.strokeStyle = '#3b3230';
+  const p1 = corre ? f*9 : 4, p2 = corre ? -f*9 : -4;
+  ctx.beginPath(); ctx.moveTo(-22,-16); ctx.lineTo(-24+p2, 0); ctx.stroke();
+  ctx.beginPath(); ctx.moveTo(-12,-16); ctx.lineTo(-12+p1, 0); ctx.stroke();
+  ctx.beginPath(); ctx.moveTo( 12,-16); ctx.lineTo( 12+p2, 0); ctx.stroke();
+  ctx.beginPath(); ctx.moveTo( 22,-16); ctx.lineTo( 24+p1, 0); ctx.stroke();
+  ctx.fillStyle = '#e8ddce';
+  ctx.beginPath(); ctx.arc(-24+p2, 0, 5, 0, 7); ctx.fill();
+  ctx.beginPath(); ctx.arc(-12+p1, 0, 5, 0, 7); ctx.fill();
+  ctx.beginPath(); ctx.arc( 12+p2, 0, 5, 0, 7); ctx.fill();
+  ctx.beginPath(); ctx.arc( 24+p1, 0, 5, 0, 7); ctx.fill();
+
+  // cuerpo robusto de staffy
+  ctx.fillStyle = '#3b3230';
+  ctx.beginPath(); ctx.ellipse(-2, -30, 34, 20, 0, 0, 7); ctx.fill();
+  // rayas atigradas
+  ctx.strokeStyle = '#2a2422'; ctx.lineWidth = 3;
+  for(let i=-1;i<=1;i++){ ctx.beginPath(); ctx.moveTo(i*14-6,-44); ctx.quadraticCurveTo(i*14, -30, i*14-4, -16); ctx.stroke(); }
+  // pecho blanco
+  ctx.fillStyle = '#efe7da';
+  ctx.beginPath(); ctx.ellipse(20, -24, 13, 13, 0, 0, 7); ctx.fill();
+  // rabito
+  ctx.strokeStyle = '#3b3230'; ctx.lineWidth = 7;
+  ctx.beginPath(); ctx.moveTo(-34,-34); ctx.quadraticCurveTo(-46, -44+f*4, -50, -36+f*5); ctx.stroke();
+
+  // cabeza (grande, de staffy)
+  ctx.save(); ctx.translate(32, -46);
+  ctx.fillStyle = '#3b3230';
+  ctx.beginPath(); ctx.ellipse(0, 0, 20, 17, 0, 0, 7); ctx.fill();
+  // franja blanca de la frente
+  ctx.fillStyle = '#efe7da';
+  ctx.beginPath(); ctx.moveTo(-2,-16); ctx.quadraticCurveTo(4,-6, 2, 2); ctx.quadraticCurveTo(-3,-6, -8,-15); ctx.closePath(); ctx.fill();
+  // morro canoso de abuelete
+  ctx.fillStyle = '#cfc6b8';
+  ctx.beginPath(); ctx.ellipse(12, 5, 11, 8, 0, 0, 7); ctx.fill();
+  ctx.fillStyle = '#20191a';
+  ctx.beginPath(); ctx.ellipse(19, 2, 5, 4, 0, 0, 7); ctx.fill();   // trufa
+  // lengua SIEMPRE fuera (marca de la casa)
+  ctx.fillStyle = '#f08ba0';
+  const lame = Math.sin(t.anim*3)*2;
+  ctx.beginPath(); ctx.ellipse(13, 13+lame, 4.5, 8, 0.2, 0, 7); ctx.fill();
+  // ojos marrones brillantes
+  ctx.fillStyle = '#5b3a1e'; ctx.beginPath(); ctx.arc(4, -4, 3.4, 0, 7); ctx.fill();
+  ctx.fillStyle = '#fff'; ctx.beginPath(); ctx.arc(5, -5, 1.2, 0, 7); ctx.fill();
+  if(t.muerto){ ctx.strokeStyle='#efe7da'; ctx.lineWidth=2;
+    ctx.beginPath(); ctx.moveTo(1,-7); ctx.lineTo(8,-1); ctx.moveTo(8,-7); ctx.lineTo(1,-1); ctx.stroke(); }
+  // orejas de rosa dobladas
+  ctx.fillStyle = '#332b29';
+  ctx.beginPath(); ctx.moveTo(-14,-13); ctx.quadraticCurveTo(-20,-26,-8,-22); ctx.quadraticCurveTo(-6,-16,-14,-13); ctx.fill();
+  ctx.beginPath(); ctx.moveTo(2,-15); ctx.quadraticCurveTo(2,-30,12,-23); ctx.quadraticCurveTo(12,-17,2,-15); ctx.fill();
+  ctx.fillStyle = '#b78a86';
+  ctx.beginPath(); ctx.ellipse(-12,-18,3,4,-0.5,0,7); ctx.fill();
+  ctx.restore();
+
+  // collar negro con chapita
+  ctx.strokeStyle = '#1c1c1c'; ctx.lineWidth = 6;
+  ctx.beginPath(); ctx.moveTo(22,-40); ctx.lineTo(30,-26); ctx.stroke();
+  ctx.fillStyle = '#c8c8c8'; ctx.beginPath(); ctx.arc(28,-22,4,0,7); ctx.fill();
+  ctx.restore();
+}
+
+function dibujaEntidades(){
+  for(const e of entidades){
+    if(e.tipo==='seto'){
+      ctx.fillStyle='#2c5a2e';
+      ctx.beginPath();
+      ctx.arc(e.x+16, e.y-18, 17, 0, 7);
+      ctx.arc(e.x+38, e.y-25, 20, 0, 7);
+      ctx.arc(e.x+52, e.y-14, 14, 0, 7);
+      ctx.fill();
+      ctx.fillStyle='#e2586e';
+      ctx.beginPath(); ctx.arc(e.x+20, e.y-28, 3, 0, 7); ctx.fill();
+      ctx.beginPath(); ctx.arc(e.x+46, e.y-34, 3, 0, 7); ctx.fill();
+    }else if(e.tipo==='charco'){
+      ctx.fillStyle='#5aa7c9';
+      ctx.beginPath(); ctx.ellipse(e.x+e.w/2, e.y, e.w/2, 8, 0, 0, 7); ctx.fill();
+      ctx.fillStyle='rgba(255,255,255,.5)';
+      ctx.beginPath(); ctx.ellipse(e.x+e.w/2-14, e.y-2, 12, 3, 0, 0, 7); ctx.fill();
+    }else if(e.tipo==='maceta'){
+      ctx.fillStyle='#b5622f'; ctx.fillRect(e.x, e.y-30, e.w, 30);
+      ctx.fillStyle='#c9744a'; ctx.fillRect(e.x-3, e.y-36, e.w+6, 8);
+      ctx.fillStyle='#e2586e';
+      ctx.beginPath(); ctx.arc(e.x+e.w/2, e.y-46, 9, 0, 7); ctx.fill();
+      ctx.fillStyle='#ffd23f'; ctx.beginPath(); ctx.arc(e.x+e.w/2, e.y-46, 3.5, 0, 7); ctx.fill();
+    }else if(e.tipo==='paloma'){
+      const ala = Math.sin(e.ala)*10;
+      ctx.fillStyle='#9aa0ad';
+      ctx.beginPath(); ctx.ellipse(e.x+22, e.y+13, 16, 10, 0, 0, 7); ctx.fill();
+      ctx.beginPath(); ctx.arc(e.x+8, e.y+8, 7, 0, 7); ctx.fill();
+      ctx.fillStyle='#7d8390';
+      ctx.beginPath(); ctx.moveTo(e.x+22, e.y+10); ctx.quadraticCurveTo(e.x+30, e.y-2-ala, e.x+40, e.y+6-ala); ctx.lineTo(e.x+26, e.y+14); ctx.fill();
+      ctx.fillStyle='#f0a034'; ctx.beginPath(); ctx.moveTo(e.x+2,e.y+7); ctx.lineTo(e.x-4,e.y+9); ctx.lineTo(e.x+2,e.y+11); ctx.fill();
+    }else if(e.tipo==='hueso'){
+      const flota = Math.sin(e.fase)*4;
+      ctx.fillStyle='#f5e8c8';
+      ctx.fillRect(e.x+6, e.y+5+flota, e.w-12, 6);
+      for(const dx of [4, e.w-4]) for(const dy of [3, 13]){
+        ctx.beginPath(); ctx.arc(e.x+dx, e.y+dy+flota, 5, 0, 7); ctx.fill();
+      }
+    }else if(e.tipo==='salchicha'){
+      const flota = Math.sin(e.fase)*5;
+      ctx.fillStyle='#c0553a'; ctx.strokeStyle='#8e3b26'; ctx.lineWidth=2;
+      ctx.beginPath(); ctx.ellipse(e.x+e.w/2, e.y+8+flota, 17, 8, -0.2, 0, 7); ctx.fill(); ctx.stroke();
+    }else if(e.tipo==='galleta'){
+      const flota = Math.sin(e.fase)*5, cx=e.x+13, cy=e.y+13+flota;
+      ctx.fillStyle='#d9a25c';
+      ctx.beginPath(); ctx.arc(cx, cy, 12, 0, 7); ctx.fill();
+      ctx.strokeStyle='#b9823f'; ctx.lineWidth=2; ctx.beginPath(); ctx.arc(cx, cy, 12, 0, 7); ctx.stroke();
+      ctx.fillStyle='#6b4226';                                     // pepitas de chocolate
+      for(const [dx,dy] of [[-5,-3],[4,-5],[0,3],[6,4],[-6,5]]){
+        ctx.beginPath(); ctx.arc(cx+dx, cy+dy, 1.8, 0, 7); ctx.fill();
+      }
+    }else if(e.tipo==='corazon'){
+      const flota = Math.sin(e.fase)*5, cx=e.x+13, cy=e.y+10+flota;
+      ctx.fillStyle='#e2586e';
+      ctx.beginPath();
+      ctx.moveTo(cx, cy+11);
+      ctx.bezierCurveTo(cx-16, cy-2, cx-8, cy-13, cx, cy-4);
+      ctx.bezierCurveTo(cx+8, cy-13, cx+16, cy-2, cx, cy+11);
+      ctx.fill();
+    }
+  }
+}
+
+function dibujaGato(){
+  if(!gato) return;
+  const f = Math.sin(gato.anim)*8;
+  ctx.save(); ctx.translate(gato.x, GROUND);
+  ctx.fillStyle = '#4a4a52';
+  ctx.lineWidth=5; ctx.lineCap='round'; ctx.strokeStyle='#4a4a52';
+  ctx.beginPath(); ctx.moveTo(-14,-12); ctx.lineTo(-16+f,0); ctx.stroke();
+  ctx.beginPath(); ctx.moveTo(12,-12); ctx.lineTo(14-f,0); ctx.stroke();
+  ctx.beginPath(); ctx.ellipse(0,-18,20,10,0,0,7); ctx.fill();
+  ctx.beginPath(); ctx.arc(-22,-24,8,0,7); ctx.fill();
+  ctx.beginPath(); ctx.moveTo(-27,-30); ctx.lineTo(-29,-38); ctx.lineTo(-22,-32); ctx.fill();
+  ctx.beginPath(); ctx.moveTo(-19,-31); ctx.lineTo(-16,-38); ctx.lineTo(-13,-31); ctx.fill();
+  ctx.strokeStyle='#4a4a52'; ctx.lineWidth=4;
+  ctx.beginPath(); ctx.moveTo(18,-22); ctx.quadraticCurveTo(30,-34, 26,-42); ctx.stroke();
+  ctx.restore();
+}
+function dibujaPersona(p, tipo){
+  if(!p) return;
+  ctx.save(); ctx.translate(p.x, GROUND);
+  if(tipo==='frank'){   // Frank: 1,90, moreno, delgado, con bigote
+    ctx.fillStyle='#3f5a78'; ctx.fillRect(-8,-80,16,46);            // camisa (delgado)
+    ctx.fillStyle='#2c3440'; ctx.fillRect(-7,-36,6,36); ctx.fillRect(2,-36,6,36); // vaqueros
+    ctx.fillStyle='#e8b98f'; ctx.beginPath(); ctx.arc(0,-92,11,0,7); ctx.fill(); // cara
+    ctx.fillStyle='#241a12';                                        // pelo moreno
+    ctx.beginPath(); ctx.arc(0,-96,11.5,Math.PI,0); ctx.fill();
+    ctx.fillRect(-11,-98,23,5);
+    ctx.fillStyle='#241a12'; ctx.fillRect(-7,-89,14,3.5);           // bigote
+    ctx.strokeStyle='#3f5a78'; ctx.lineWidth=5; ctx.lineCap='round';
+    ctx.beginPath(); ctx.moveTo(8,-72); ctx.lineTo(22,-90); ctx.stroke();  // brazo lanzando
+  }else if(tipo==='ella'){  // Ella: delgadita, piel clara, pelo castaño claro
+    ctx.fillStyle='#eba9c0'; ctx.fillRect(-7,-70,14,40);            // vestido rosa (delgadita)
+    ctx.fillStyle='#f3d9c4'; ctx.fillRect(-5,-30,4,30); ctx.fillRect(1,-30,4,30); // piernas piel clara
+    ctx.fillStyle='#f3d9c4'; ctx.beginPath(); ctx.arc(0,-82,10,0,7); ctx.fill(); // cara piel clara
+    ctx.fillStyle='#b08d5b';                                        // melena castaño claro
+    ctx.beginPath(); ctx.arc(0,-86,11,Math.PI,0); ctx.fill();
+    ctx.fillRect(-11,-86,5,26); ctx.fillRect(6,-86,5,26);
+    ctx.strokeStyle='#eba9c0'; ctx.lineWidth=5; ctx.lineCap='round';
+    ctx.beginPath(); ctx.moveTo(7,-62); ctx.lineTo(19,-80); ctx.stroke();   // saludando
+  }else if(tipo==='senyora'){  // vecina del parque
+    ctx.fillStyle='#8e6fae'; ctx.fillRect(-9,-64,18,38);            // vestido lila
+    ctx.fillStyle='#e8b98f'; ctx.fillRect(-6,-26,5,26); ctx.fillRect(1,-26,5,26);
+    ctx.fillStyle='#e8b98f'; ctx.beginPath(); ctx.arc(0,-76,10,0,7); ctx.fill();
+    ctx.fillStyle='#bfb8ae';                                        // pelo gris con moño
+    ctx.beginPath(); ctx.arc(0,-80,10.5,Math.PI,0); ctx.fill();
+    ctx.beginPath(); ctx.arc(0,-90,5,0,7); ctx.fill();
+    ctx.fillStyle='#5c3a22';                                        // bolso
+    ctx.fillRect(9,-52,10,9);
+  }else if(tipo==='chico'){    // chaval con gorra
+    ctx.fillStyle='#3e8e5a'; ctx.fillRect(-8,-64,16,36);            // camiseta verde
+    ctx.fillStyle='#2c3440'; ctx.fillRect(-7,-28,6,28); ctx.fillRect(2,-28,6,28);
+    ctx.fillStyle='#d9a878'; ctx.beginPath(); ctx.arc(0,-76,10,0,7); ctx.fill();
+    ctx.fillStyle='#c23b3b';                                        // gorra roja
+    ctx.beginPath(); ctx.arc(0,-80,10.5,Math.PI,0); ctx.fill();
+    ctx.fillRect(0,-82,16,4);                                       // visera
+  }else{                // Abuelo: gafas de pasta negras y bigote
+    ctx.fillStyle='#7a6a52'; ctx.fillRect(-10,-68,20,40);           // chaqueta de punto
+    ctx.fillStyle='#5b5147'; ctx.fillRect(-8,-30,7,30); ctx.fillRect(1,-30,7,30); // pantalón
+    ctx.fillStyle='#e8b98f'; ctx.beginPath(); ctx.arc(0,-80,11,0,7); ctx.fill(); // cara
+    ctx.fillStyle='#d8d3ca';                                        // pelo canoso
+    ctx.beginPath(); ctx.arc(0,-84,11.5,Math.PI,0); ctx.fill();
+    // gafas de pasta negras
+    ctx.strokeStyle='#151515'; ctx.lineWidth=2.6;
+    ctx.strokeRect(-9,-84,8,7); ctx.strokeRect(1,-84,8,7);
+    ctx.beginPath(); ctx.moveTo(-1,-81); ctx.lineTo(1,-81); ctx.stroke();   // puente
+    ctx.fillStyle='#d8d3ca'; ctx.fillRect(-7,-74,14,3.5);           // bigote canoso
+    // bastón
+    ctx.strokeStyle='#8a5a30'; ctx.lineWidth=4; ctx.lineCap='round';
+    ctx.beginPath(); ctx.moveTo(-14,-52); ctx.lineTo(-16,0); ctx.stroke();
+    ctx.strokeStyle='#7a6a52'; ctx.lineWidth=5;
+    ctx.beginPath(); ctx.moveTo(9,-60); ctx.lineTo(20,-76); ctx.stroke();   // brazo con la galleta
+  }
+  ctx.restore();
+}
+
+function dibujaPeatones(){
+  for(const pt of peatones){
+    ctx.save();
+    ctx.globalAlpha = 0.8;                        // ligeramente atenuados: son fondo
+    ctx.translate(0, Math.sin(pt.paso)*1.5);      // balanceo al andar
+    dibujaPersona(pt, pt.tipo);
+    ctx.restore();
+  }
+}
+
+function render(){
+  ctx.save();
+  if(sacudida>0) ctx.translate(rnd(-5,5), rnd(-5,5));
+  fondo();
+  dibujaPeatones();
+  dibujaPersona(frank, 'frank');
+  dibujaPersona(ella, 'ella');
+  dibujaPersona(abuelo, 'abuelo');
+  dibujaEntidades();
+  dibujaGato();
+  dibujaTote();
+  ctx.restore();
+}
+
+/* ================= BUCLE ================= */
+let ultimoT = performance.now();
+function loop(t){
+  const dt = Math.min((t - ultimoT)/1000, 0.05);
+  ultimoT = t;
+  if(estado === 'playing') update(dt);
+  if(estado !== 'menu' || true) render();
+  requestAnimationFrame(loop);
+}
+reset(); render();
+requestAnimationFrame(loop);
+
+/* ================= FIREBASE (récords online) ================= */
+const fb = { listo:false, user:null,
+  async init(){
+    if(!ENABLE_FIREBASE || firebaseConfig.apiKey==='PEGA_AQUI') return;
+    const carga = src => new Promise(r=>{ const s=document.createElement('script'); s.src=src; s.onload=r; document.head.appendChild(s); });
+    await carga('https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js');
+    await carga('https://www.gstatic.com/firebasejs/10.12.0/firebase-auth-compat.js');
+    await carga('https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore-compat.js');
+    firebase.initializeApp(firebaseConfig);
+    this.listo = true;
+    document.getElementById('authBar').classList.remove('oculto');
+    firebase.auth().onAuthStateChanged(u=>{
+      this.user = u;
+      document.getElementById('quien').textContent = u ? '👋 ' + (u.displayName||'').split(' ')[0] : '';
+      document.getElementById('btnLogin').style.display = u ? 'none' : '';
+    });
+    document.getElementById('btnLogin').addEventListener('pointerdown', e=>{
+      e.stopPropagation();
+      firebase.auth().signInWithPopup(new firebase.auth.GoogleAuthProvider());
+    });
+  },
+  async guardar(p){
+    if(!this.user) return this.top();
+    const ref = firebase.firestore().collection('toteRunner').doc(this.user.uid);
+    const doc = await ref.get();
+    if(!doc.exists || (doc.data().puntos||0) < p)
+      await ref.set({ nombre:(this.user.displayName||'Anónimo').split(' ')[0], puntos:p, fecha:new Date() });
+    this.top();
+  },
+  async top(){
+    const snap = await firebase.firestore().collection('toteRunner').orderBy('puntos','desc').limit(10).get();
+    const lb = document.getElementById('lb'); lb.innerHTML='<b>🏆 Top 10</b>'; lb.style.display='block';
+    let i=1; snap.forEach(d=>{ const x=d.data();
+      lb.innerHTML += `<li>${i++}. ${x.nombre} — ${x.puntos}</li>`; });
+  }
+};
+fb.init();
+
+/* ================= PWA INSTALABLE 📱 =================
+   Genera el icono (la cara de Tote) y el manifest al vuelo,
+   todo dentro de este mismo archivo. Al servirlo por HTTPS
+   (GitHub Pages), Chrome ofrece "Instalar aplicación". */
+(function(){
+  const c = document.createElement('canvas'); c.width = c.height = 512;
+  const x = c.getContext('2d');
+  // fondo atardecer redondeado
+  const g = x.createLinearGradient(0,0,0,512);
+  g.addColorStop(0,'#2b1d4e'); g.addColorStop(1,'#a3506e');
+  x.fillStyle = g;
+  x.beginPath(); x.roundRect(0,0,512,512,110); x.fill();
+  // cara de Tote de frente
+  x.translate(256,272); x.scale(10.5,10.5);
+  x.fillStyle='#3b3230'; x.beginPath(); x.ellipse(0,-2,20,18,0,0,7); x.fill();
+  // orejitas dobladas
+  x.fillStyle='#332b29';
+  x.beginPath(); x.moveTo(-14,-14); x.quadraticCurveTo(-23,-28,-8,-23); x.quadraticCurveTo(-6,-17,-14,-14); x.fill();
+  x.beginPath(); x.moveTo(14,-14); x.quadraticCurveTo(23,-28,8,-23); x.quadraticCurveTo(6,-17,14,-14); x.fill();
+  x.fillStyle='#b78a86';
+  x.beginPath(); x.ellipse(-13,-19,3,4,-0.5,0,7); x.fill();
+  x.beginPath(); x.ellipse(13,-19,3,4,0.5,0,7); x.fill();
+  // franja blanca de la frente
+  x.fillStyle='#efe7da';
+  x.beginPath(); x.moveTo(-3,-19); x.quadraticCurveTo(0,-8,-1,0); x.quadraticCurveTo(2,-8,3,-19);
+  x.quadraticCurveTo(0,-21,-3,-19); x.closePath(); x.fill();
+  // morro canoso
+  x.fillStyle='#cfc6b8'; x.beginPath(); x.ellipse(0,7,11,8,0,0,7); x.fill();
+  x.fillStyle='#20191a'; x.beginPath(); x.ellipse(0,3,5,3.6,0,0,7); x.fill();
+  // lengua fuera (marca de la casa)
+  x.fillStyle='#f08ba0'; x.beginPath(); x.ellipse(0,15,4.5,7,0,0,7); x.fill();
+  // ojos marrones
+  x.fillStyle='#5b3a1e';
+  x.beginPath(); x.arc(-8,-6,3.3,0,7); x.fill();
+  x.beginPath(); x.arc(8,-6,3.3,0,7); x.fill();
+  x.fillStyle='#fff';
+  x.beginPath(); x.arc(-7,-7,1.2,0,7); x.fill();
+  x.beginPath(); x.arc(9,-7,1.2,0,7); x.fill();
+  const icono = c.toDataURL('image/png');
+
+  const man = {
+    name: 'Tote Runner', short_name: 'Tote',
+    description: 'Tote, el staffy más bueno del parque, corre y salta',
+    display: 'standalone', orientation: 'any',
+    background_color: '#2b1d4e', theme_color: '#2b1d4e',
+    start_url: location.href, scope: new URL('.', location.href).href,
+    icons: [
+      { src: icono, sizes: '512x512', type: 'image/png', purpose: 'any' },
+      { src: icono, sizes: '192x192', type: 'image/png', purpose: 'maskable' }
+    ]
+  };
+  const link = document.createElement('link');
+  link.rel = 'manifest';
+  link.href = 'data:application/manifest+json;charset=utf-8,' + encodeURIComponent(JSON.stringify(man));
+  document.head.appendChild(link);
+  const apple = document.createElement('link');
+  apple.rel = 'apple-touch-icon'; apple.href = icono;
+  document.head.appendChild(apple);
+
+  // ✈️ Modo offline: registra el service worker (sw.js debe estar
+  // en la misma carpeta que este index.html)
+  if ('serviceWorker' in navigator) {
+    navigator.serviceWorker.register('./sw.js').catch(() => {});
+  }
+})();
+</script>
+</body>
+</html>

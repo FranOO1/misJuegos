@@ -117,7 +117,7 @@
       ⬇️ Desliza hacia abajo (o flecha ↓) = caer a plomo<br>
       🐦 ¡Cae ENCIMA de una paloma y rebotas con puntos!<br>
       🔗 Encadena palomas y huesos sin pisar suelo = COMBO<br>
-      🐱 Si aparece un gato… agárrate: modo TURBO<br>
+      🐱 Gato = TURBO… ¡y si lo pillas por el suelo, MODO IMPARABLE!<br>
       🌭 Salchicha = escudo · ❤️ Caricias = x2 · 🍪 Galleta = calma
     </div>
     <button class="btn" id="btnTienda">🛍️ Tienda de Tote · 🦴 <span id="menuBanco">0</span></button>
@@ -289,6 +289,7 @@ const rnd = (a,b)=>a + Math.random()*(b-a);
 /* ================= CONTROLES ================= */
 function accion(){
   if(tiendaAbierta) return;                 // la tienda gestiona sus propios toques
+  if(estado === 'gameover' && !puedeReiniciar) return;   // aún no ha salido el cartel
   if(estado === 'menu' || estado === 'gameover'){
     reset(); estado = 'playing';
     iniciarMusica();
@@ -444,7 +445,22 @@ function update(dt){
   if(jugando > 20){ tAbuelo -= dt; if(tAbuelo<=0) spawnGalleta(); }
 
   // gato cruzando (más rápido que el mundo)
-  if(gato){ gato.x -= (v + 240)*dt; gato.anim += dt*14; if(gato.x < -80) gato = null; }
+  if(gato){
+    gato.x -= (v + 240)*dt; gato.anim += dt*14;
+    // 😼 ¡A por él! Si Tote lo pilla a ras de suelo: MODO IMPARABLE
+    if(!gato.pillado && gato.x > tote.x - 30 && gato.x < tote.x + 36 && tote.y > GROUND - 28){
+      gato.pillado = true;
+      const pts = 300 * pMult; puntos += pts;
+      invulnT = 6;                                    // 6s sin que nada pueda pararle
+      turboT  = CFG.turboDur;                         // turbo renovado
+      hitStop = 0.08; sacudida = Math.max(sacudida, 0.2);
+      sfx.power(); puffPolvo(gato.x, GROUND); confeti(gato.x, GROUND - 30);
+      flota('¡GATO PILLADO! +' + Math.floor(pts), tote.x, tote.y - 110, '#ffd23f');
+      flota('MODO IMPARABLE 6s', tote.x, tote.y - 90, '#7CFF6B');
+      gato = null;                                    // el gato sale por patas 🏃💨
+    }
+    else if(gato && gato.x < -80) gato = null;
+  }
   if(frank){ frank.x -= v*dt; if(frank.x < -120) frank = null; }
   if(ella){  ella.x  -= v*dt; if(ella.x  < -120) ella  = null; }
   if(abuelo){ abuelo.x -= v*dt; if(abuelo.x < -120) abuelo = null; }
@@ -528,9 +544,12 @@ function actualizarHUD(){
   document.getElementById('score').textContent  = Math.floor(puntos);
   document.getElementById('huesos').textContent = '🦴 ' + huesosPartida;
 }
+let puedeReiniciar = true;
 function gameOver(){
   tote.muerto = true; estado = 'gameover'; sfx.golpe(); sacudida = 0.4;
   hitStop = 0.09;                                   // impacto gordo
+  puedeReiniciar = false;                           // ignora toques frenéticos hasta que salga el cartel
+  touchY0 = null; smashHecho = false;
   document.getElementById('musicaFondo').pause();
   banco += huesosPartida; localStorage.setItem('tote_banco', banco);
   document.getElementById('menuBanco').textContent = banco;
@@ -544,7 +563,11 @@ function gameOver(){
   document.getElementById('goBanco').textContent  = banco;
   document.getElementById('nuevoRecord').style.display = nuevo ? 'block' : 'none';
   if(fb.listo) fb.guardar(p);
-  setTimeout(()=>document.getElementById('gameover').classList.remove('oculto'), 450);
+  setTimeout(()=>{
+    if(estado !== 'gameover') return;               // por si acaso, nunca tapar una partida en marcha
+    document.getElementById('gameover').classList.remove('oculto');
+    puedeReiniciar = true;                          // ahora sí: toca para reintentar
+  }, 450);
 }
 
 /* ================= JUICE / FX ✨ ================= */
@@ -783,11 +806,17 @@ function dibujaEntidades(){
       ctx.beginPath(); ctx.moveTo(e.x+22, e.y+10); ctx.quadraticCurveTo(e.x+30, e.y-2-ala, e.x+40, e.y+6-ala); ctx.lineTo(e.x+26, e.y+14); ctx.fill();
       ctx.fillStyle='#f0a034'; ctx.beginPath(); ctx.moveTo(e.x+2,e.y+7); ctx.lineTo(e.x-4,e.y+9); ctx.lineTo(e.x+2,e.y+11); ctx.fill();
     }else if(e.tipo==='hueso'){
-      const flota = Math.sin(e.fase)*4;
-      ctx.fillStyle='#f5e8c8';
-      ctx.fillRect(e.x+6, e.y+5+flota, e.w-12, 6);
+      const fl = Math.sin(e.fase)*4;
+      // silueta oscura detrás para que resalte con el cielo de día
+      ctx.fillStyle='#6b4a22';
+      ctx.fillRect(e.x+4, e.y+3+fl, e.w-8, 10);
       for(const dx of [4, e.w-4]) for(const dy of [3, 13]){
-        ctx.beginPath(); ctx.arc(e.x+dx, e.y+dy+flota, 5, 0, 7); ctx.fill();
+        ctx.beginPath(); ctx.arc(e.x+dx, e.y+dy+fl, 6.8, 0, 7); ctx.fill();
+      }
+      ctx.fillStyle='#fffdf2';
+      ctx.fillRect(e.x+6, e.y+5+fl, e.w-12, 6);
+      for(const dx of [4, e.w-4]) for(const dy of [3, 13]){
+        ctx.beginPath(); ctx.arc(e.x+dx, e.y+dy+fl, 5, 0, 7); ctx.fill();
       }
     }else if(e.tipo==='salchicha'){
       const flota = Math.sin(e.fase)*5;
@@ -1100,6 +1129,8 @@ const fb = { listo:false, user:null,
     await carga('https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore-compat.js');
     firebase.initializeApp(firebaseConfig);
     this.listo = true;
+    // Sin sesión guardada: al abrir el juego SIEMPRE se ofrece iniciar sesión
+    firebase.auth().setPersistence(firebase.auth.Auth.Persistence.NONE).catch(()=>{});
     this.provider = new firebase.auth.GoogleAuthProvider();
     this.provider.setCustomParameters({ prompt: 'select_account' });   // deja ELEGIR la cuenta
     document.getElementById('authBar').classList.remove('oculto');

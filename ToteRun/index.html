@@ -4,7 +4,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
-<meta name="theme-color" content="#2b1d4e">
+<meta name="theme-color" content="#3aa0e8">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
@@ -14,11 +14,11 @@
 <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&family=Nunito:wght@600;800&display=swap" rel="stylesheet">
 <style>
   :root{
-    --cielo1:#2b1d4e; --cielo2:#7a3b6e; --cielo3:#ff9a5c;
-    --hueso:#f5e8c8; --rosa:#f08ba0; --verde:#2f6631;
+    --cielo1:#3aa0e8; --cielo2:#7fd0f2; --cielo3:#fff3c4;
+    --hueso:#fffbef; --rosa:#f08ba0; --verde:#3f9d4a;
   }
   *{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent}
-  html,body{height:100%;overflow:hidden;background:var(--cielo1);touch-action:manipulation;
+  html,body{height:100%;overflow:hidden;background:var(--cielo1);touch-action:none;
     font-family:'Nunito',system-ui,sans-serif;color:var(--hueso);user-select:none;-webkit-user-select:none}
   #wrap{position:fixed;inset:0}
   canvas{display:block;width:100%;height:100%}
@@ -78,6 +78,13 @@
     padding:8px 12px;cursor:pointer;background:var(--hueso);color:#3b2a1a;box-shadow:0 3px 0 #b09b6f}
   .item button:disabled{opacity:.45;box-shadow:none}
   .item button.puesto{background:#7CFF6B;box-shadow:0 3px 0 #3f9636}
+
+  /* ---- Aviso de girar el móvil ---- */
+  #giraScr{display:none;position:fixed;inset:0;z-index:50;background:#2a6db3;
+    place-items:center;text-align:center;font-size:15px;line-height:2}
+  #giraScr .icono{font-size:52px;animation:gira 1.6s ease-in-out infinite}
+  @keyframes gira{0%,20%{transform:rotate(0)}60%,100%{transform:rotate(90deg)}}
+  @media (orientation: portrait) and (pointer: coarse){ #giraScr{display:grid} }
 </style>
 </head>
 <body>
@@ -85,7 +92,7 @@
 
 <!-- HUD -->
 <div id="hud">
-  <div id="hudL"><div class="chip" id="btnMute">🔊</div></div>
+  <div id="hudL"><div class="chip" id="btnMute">🔊</div><div class="chip" id="btnAjustes">⚙️</div></div>
   <div id="hudR">
     <div id="score" class="pix">0</div>
     <div id="huesos">🦴 0</div>
@@ -94,7 +101,7 @@
 </div>
 <div id="estado">
   <div class="buff" id="bTurbo">🐱 ¡TURBO! x2 puntos</div>
-  <div class="buff" id="bEscudo">🌭 Escudo de amigo humano</div>
+  <div class="buff" id="bEscudo">🌭 Escudo de Frank</div>
   <div class="buff" id="bAmor">❤️ Caricias x2</div>
   <div class="buff" id="bCalma">🍪 Calma del abuelo</div>
 </div>
@@ -104,7 +111,7 @@
 <div class="screen" id="menu">
   <div class="panel">
     <div id="titulo" class="pix">TOTE<br><span class="t2">RUNNER</span></div>
-    <div class="sub">Tote, staffy bueno 🐶<br>persiguiendo todo lo que se mueve</div>
+    <div class="sub">Tote, 12 años de staffy bueno 🐶<br>persiguiendo todo lo que se mueve</div>
     <div class="howto">
       👆 Toca para saltar · doble toque = doble salto<br>
       ⬇️ Desliza hacia abajo (o flecha ↓) = caer a plomo<br>
@@ -135,10 +142,20 @@
   </div>
 </div>
 
-<!-- PAUSA -->
+<!-- PAUSA / AJUSTES ⚙️ -->
 <div class="screen oculto" id="pausaScr">
-  <div class="panel"><div class="pix" style="font-size:18px">PAUSA</div>
-  <div class="tap pix">— TOCA PARA SEGUIR —</div></div>
+  <div class="panel">
+    <div class="pix" style="font-size:18px">PAUSA</div>
+    <button class="btn" id="btnSeguir">▶️ Continuar</button><br>
+    <button class="btn" id="btnReiniciar">🔄 Reiniciar partida</button><br>
+    <button class="btn" id="btnSesion" style="display:none">🔑 Sesión</button><br>
+    <button class="btn" id="btnSalirMenu">🏠 Salir al menú</button>
+  </div>
+</div>
+
+<!-- GIRA EL MÓVIL 🔄 -->
+<div id="giraScr" class="pix">
+  <div><div class="icono">📱</div>GIRA EL MÓVIL<br><span style="font-size:10px;opacity:.85">Tote corre en horizontal</span></div>
 </div>
 
 <!-- TIENDA 🛍️ -->
@@ -152,7 +169,7 @@
 </div>
 
 <!-- 🎵 Música de fondo (pon un "musica.mp3" en la misma carpeta) -->
-<audio id="musicaFondo" loop preload="auto" src="mfcc-retro-arcade-game-music-297305.mp3"></audio>
+<audio id="musicaFondo" loop preload="auto" src="musica.mp3"></audio>
 
 <script>
 /* ============================================================
@@ -167,12 +184,12 @@
         allow write: if request.auth != null && request.auth.uid == uid;
       }
    ============================================================ */
-const ENABLE_FIREBASE = true;
+const ENABLE_FIREBASE = false;
 const firebaseConfig = {
-  apiKey: "AIzaSyBkQ4NcoxU0V_R3jXnkH5Eu9WRDpr9eKXo",
-  authDomain: "mishoras-bb0cc.firebaseapp.com",
-  projectId: "mishoras-bb0cc",
-  appId: "1:282064047722:web:24a04aabeecb4a67394413"
+  apiKey: "PEGA_AQUI",
+  authDomain: "TU_PROYECTO.firebaseapp.com",
+  projectId: "TU_PROYECTO",
+  appId: "PEGA_AQUI"
 };
 
 /* ================= CONFIG DEL JUEGO ================= */
@@ -275,18 +292,28 @@ function accion(){
   if(estado === 'menu' || estado === 'gameover'){
     reset(); estado = 'playing';
     iniciarMusica();
+    aHorizontal();                          // 📱 pantalla completa + horizontal
     document.getElementById('menu').classList.add('oculto');
     document.getElementById('gameover').classList.add('oculto');
     return;
   }
   if(estado === 'pausa'){
     estado = 'playing'; document.getElementById('pausaScr').classList.add('oculto');
-    ultimoT = performance.now(); return;
+    ultimoT = performance.now(); if(!mute) musica.play().catch(()=>{}); return;
   }
   if(estado === 'playing' && !tote.muerto){
+    if(musica.paused && !mute) musica.play().catch(()=>{});   // por si el navegador la bloqueó
     if(tote.enSuelo){ tote.vy = CFG.salto; tote.enSuelo = false; tote.saltos = 1; sfx.salto(); }
     else if(tote.saltos < 2){ tote.vy = CFG.dobleSalto; tote.saltos = 2; sfx.salto(); }
   }
+}
+// 📱 Intenta poner el juego a pantalla completa y bloquear en horizontal
+function aHorizontal(){
+  try{
+    const el = document.documentElement;
+    const fs = el.requestFullscreen ? el.requestFullscreen() : Promise.resolve();
+    Promise.resolve(fs).then(()=> screen.orientation && screen.orientation.lock('landscape')).catch(()=>{});
+  }catch(e){}
 }
 // ⬇️ Caída rápida (smash): cancela el salto y cae a plomo
 function caidaRapida(){
@@ -308,9 +335,16 @@ addEventListener('pointermove', e=>{
   if(touchY0 !== null && !smashHecho && e.clientY - touchY0 > 45){ smashHecho = true; caidaRapida(); }
 });
 addEventListener('pointerup', ()=>{ touchY0 = null; });
+// fallback táctil: en algunos Android el navegador cancela pointermove
+addEventListener('touchstart', e=>{ touchY0 = e.touches[0].clientY; smashHecho = false; }, {passive:true});
+addEventListener('touchmove', e=>{
+  if(touchY0 !== null && !smashHecho && e.touches[0].clientY - touchY0 > 45){ smashHecho = true; caidaRapida(); }
+}, {passive:true});
+addEventListener('touchend', ()=>{ touchY0 = null; }, {passive:true});
 document.addEventListener('visibilitychange', ()=>{
   if(document.hidden && estado==='playing'){
     estado='pausa'; document.getElementById('pausaScr').classList.remove('oculto');
+    document.getElementById('musicaFondo').pause();
   }
 });
 
@@ -319,7 +353,7 @@ function spawnObstaculo(){
   const r = Math.random();
   const x = W + 60;
   if(r < 0.30)      entidades.push({tipo:'seto',   x, y:GROUND, w:64, h:40});
-  else if(r < 0.55) entidades.push({tipo:'charco', x, y:GROUND, w:110, h:10});
+  else if(r < 0.55) entidades.push({tipo:'charco', x, y:GROUND, w: Math.round(Math.min(120, 68 + vel*0.09)), h:10});
   else if(r < 0.75) entidades.push({tipo:'maceta', x, y:GROUND, w:36, h:42});
   else {            // paloma: alta (no saltes) o baja (salta ya)
     const alta = Math.random() < 0.55;
@@ -418,9 +452,9 @@ function update(dt){
   // pandilla y vecinos paseando por el fondo (sin colisión)
   tPeaton -= dt;
   if(tPeaton <= 0){
-    const tipos = ['frank','ella','abuelo','senyora','chico'];
+    const tipos = ['frank','ella','abuelo','senyora','chico','runner','nino','abuela'];
     peatones.push({ tipo: tipos[Math.floor(Math.random()*tipos.length)], x: W+70, paso: Math.random()*6 });
-    tPeaton = rnd(3.5, 7.5);
+    tPeaton = rnd(3, 6.5);                     // con más vecinos, el parque se ve más vivo
   }
   for(let i = peatones.length-1; i >= 0; i--){
     const pt = peatones[i];
@@ -570,49 +604,65 @@ function dibujaFX(){
 
 /* ================= DIBUJO ================= */
 function fondo(){
-  // cielo atardecer (como su parque)
+  // ☀️ cielo de día en el parque
   const g = ctx.createLinearGradient(0,0,0,GROUND);
-  g.addColorStop(0,'#2b1d4e'); g.addColorStop(0.55,'#7a3b6e'); g.addColorStop(1,'#ff9a5c');
+  g.addColorStop(0,'#3aa0e8'); g.addColorStop(0.6,'#7fd0f2'); g.addColorStop(1,'#fff3c4');
   ctx.fillStyle = g; ctx.fillRect(0,0,W,GROUND);
-  // luna
-  ctx.fillStyle = '#f7ecd6'; ctx.beginPath(); ctx.arc(W*0.82, 70, 22, 0, 7); ctx.fill();
-  ctx.fillStyle = 'rgba(43,29,78,0.35)'; ctx.beginPath(); ctx.arc(W*0.82+8, 64, 18, 0, 7); ctx.fill();
-  // árboles lejanos (parallax)
-  const off1 = (distancia*0.25) % 260;
-  ctx.fillStyle = '#3d2a52';
-  for(let x = -off1; x < W+130; x += 260){
-    ctx.fillRect(x+58, GROUND-105, 10, 105);
-    ctx.beginPath(); ctx.arc(x+63, GROUND-118, 42, 0, 7); ctx.fill();
+  // sol con brillo
+  const sol = ctx.createRadialGradient(W*0.82, 70, 8, W*0.82, 70, 70);
+  sol.addColorStop(0,'rgba(255,236,150,0.95)'); sol.addColorStop(1,'rgba(255,236,150,0)');
+  ctx.fillStyle = sol; ctx.beginPath(); ctx.arc(W*0.82, 70, 70, 0, 7); ctx.fill();
+  ctx.fillStyle = '#ffde59'; ctx.beginPath(); ctx.arc(W*0.82, 70, 24, 0, 7); ctx.fill();
+  // ☁️ nubes esponjosas (parallax lento)
+  const offN = (distancia*0.12) % (W+320);
+  ctx.fillStyle = 'rgba(255,255,255,0.92)';
+  for(const [bx,by,s] of [[80,64,1],[420,100,0.8],[760,52,1.15]]){
+    const x = ((bx - offN) % (W+320) + W+320) % (W+320) - 160;
+    ctx.beginPath();
+    ctx.arc(x, by, 16*s, 0, 7); ctx.arc(x+20*s, by-9*s, 13*s, 0, 7); ctx.arc(x+40*s, by, 15*s, 0, 7);
+    ctx.arc(x+20*s, by+7*s, 17*s, 0, 7);
+    ctx.fill();
   }
-  // farolas encendidas (parallax medio)
+  // árboles frondosos (parallax)
+  const off1 = (distancia*0.25) % 260;
+  for(let x = -off1; x < W+130; x += 260){
+    ctx.fillStyle = '#8a5a30'; ctx.fillRect(x+58, GROUND-105, 10, 105);
+    ctx.fillStyle = '#3f8d4a'; ctx.beginPath(); ctx.arc(x+63, GROUND-118, 42, 0, 7); ctx.fill();
+    ctx.fillStyle = '#57a862'; ctx.beginPath(); ctx.arc(x+48, GROUND-128, 22, 0, 7); ctx.fill();
+  }
+  // 🎈 globos atados (parallax medio, alegría)
   const off2 = (distancia*0.55) % 420;
-  for(let x = -off2; x < W+80; x += 420){
-    ctx.fillStyle = '#241b30'; ctx.fillRect(x+120, GROUND-150, 7, 150);
-    ctx.fillStyle = '#ffd98a';
-    ctx.beginPath(); ctx.arc(x+123, GROUND-155, 9, 0, 7); ctx.fill();
-    const glow = ctx.createRadialGradient(x+123, GROUND-155, 4, x+123, GROUND-155, 46);
-    glow.addColorStop(0,'rgba(255,217,138,0.4)'); glow.addColorStop(1,'rgba(255,217,138,0)');
-    ctx.fillStyle = glow; ctx.beginPath(); ctx.arc(x+123, GROUND-155, 46, 0, 7); ctx.fill();
+  const globoCols = ['#e2586e','#ffd23f','#5aa7c9','#f08ba0'];
+  for(let x = -off2, gi = 0; x < W+80; x += 420, gi++){
+    const cx = x+123, cy = GROUND-150 + Math.sin((distancia*0.01)+gi)*6;
+    ctx.strokeStyle = 'rgba(80,60,40,0.6)'; ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.moveTo(cx, GROUND); ctx.lineTo(cx, cy+16); ctx.stroke();
+    ctx.fillStyle = globoCols[((gi%4)+4)%4];
+    ctx.beginPath(); ctx.ellipse(cx, cy, 13, 16, 0, 0, 7); ctx.fill();
+    ctx.fillStyle = 'rgba(255,255,255,0.5)';
+    ctx.beginPath(); ctx.ellipse(cx-4, cy-5, 4, 6, -0.4, 0, 7); ctx.fill();
   }
   // bancos del parque (decorativos, Tote pasa por delante sin chocar)
   const offB = (distancia) % 680;
   for(let x = -offB; x < W+120; x += 680){
-    ctx.fillStyle = '#54382a';
+    ctx.fillStyle = '#a8703f';
     ctx.fillRect(x+300, GROUND-42, 92, 9);          // respaldo
     ctx.fillRect(x+300, GROUND-28, 92, 8);          // asiento
     ctx.fillRect(x+307, GROUND-20, 7, 20);          // patas
     ctx.fillRect(x+378, GROUND-20, 7, 20);
-    ctx.fillStyle = '#3d2a1f';
+    ctx.fillStyle = '#8a5a30';
     ctx.fillRect(x+300, GROUND-42, 92, 3);
   }
-  // suelo de césped
-  ctx.fillStyle = '#2f6631'; ctx.fillRect(0, GROUND, W, H-GROUND);
-  ctx.fillStyle = '#3a7d3c'; ctx.fillRect(0, GROUND, W, 8);
-  // tréboles / florecillas
+  // suelo de césped luminoso
+  ctx.fillStyle = '#3f9d4a'; ctx.fillRect(0, GROUND, W, H-GROUND);
+  ctx.fillStyle = '#55b661'; ctx.fillRect(0, GROUND, W, 8);
+  // florecillas de colores
   const off3 = (distancia) % 90;
-  ctx.fillStyle = '#dfe8cf';
-  for(let x = -off3; x < W; x += 90){
-    ctx.beginPath(); ctx.arc(x+30, GROUND+30, 3, 0, 7); ctx.fill();
+  const florCols = ['#fff','#ffd23f','#f08ba0'];
+  for(let x = -off3, fi = 0; x < W; x += 90, fi++){
+    ctx.fillStyle = florCols[((fi%3)+3)%3];
+    ctx.beginPath(); ctx.arc(x+30, GROUND+30, 3.2, 0, 7); ctx.fill();
+    ctx.fillStyle = '#fff';
     ctx.beginPath(); ctx.arc(x+70, GROUND+58, 2.5, 0, 7); ctx.fill();
   }
   // diente de león (guiño a la foto)
@@ -661,27 +711,31 @@ function dibujaTote(){
   ctx.strokeStyle = '#3b3230'; ctx.lineWidth = 7;
   ctx.beginPath(); ctx.moveTo(-34,-34); ctx.quadraticCurveTo(-46, -44+f*4, -50, -36+f*5); ctx.stroke();
 
-  // cabeza (grande, de staffy)
+  // cabeza de staffy: cráneo ancho, mofletes potentes y morro corto
   ctx.save(); ctx.translate(32, -46);
   ctx.fillStyle = '#3b3230';
-  ctx.beginPath(); ctx.ellipse(0, 0, 20, 17, 0, 0, 7); ctx.fill();
+  ctx.beginPath(); ctx.ellipse(-2, -4, 20, 15, 0, 0, 7); ctx.fill();       // cráneo ancho
+  ctx.beginPath(); ctx.ellipse(3, 6, 17, 12, 0, 0, 7); ctx.fill();         // mofletes / mandíbula de staffy
   // franja blanca de la frente
   ctx.fillStyle = '#efe7da';
-  ctx.beginPath(); ctx.moveTo(-2,-16); ctx.quadraticCurveTo(4,-6, 2, 2); ctx.quadraticCurveTo(-3,-6, -8,-15); ctx.closePath(); ctx.fill();
-  // morro canoso de abuelete
+  ctx.beginPath(); ctx.moveTo(-1,-17); ctx.quadraticCurveTo(5,-6, 3, 4); ctx.quadraticCurveTo(-2,-6, -7,-16); ctx.closePath(); ctx.fill();
+  // morro corto y ancho, canoso de abuelete
   ctx.fillStyle = '#cfc6b8';
-  ctx.beginPath(); ctx.ellipse(12, 5, 11, 8, 0, 0, 7); ctx.fill();
+  ctx.beginPath(); ctx.ellipse(13, 5, 10, 9, 0, 0, 7); ctx.fill();
+  // sonrisa amplia marca staffy
+  ctx.strokeStyle = '#2a2220'; ctx.lineWidth = 2; ctx.lineCap = 'round';
+  ctx.beginPath(); ctx.moveTo(20, 6); ctx.quadraticCurveTo(13, 13, 4, 10); ctx.stroke();
   ctx.fillStyle = '#20191a';
-  ctx.beginPath(); ctx.ellipse(19, 2, 5, 4, 0, 0, 7); ctx.fill();   // trufa
+  ctx.beginPath(); ctx.ellipse(19, 1, 5.5, 4, 0, 0, 7); ctx.fill();        // trufa grande
   // lengua SIEMPRE fuera (marca de la casa)
   ctx.fillStyle = '#f08ba0';
   const lame = Math.sin(t.anim*3)*2;
-  ctx.beginPath(); ctx.ellipse(13, 13+lame, 4.5, 8, 0.2, 0, 7); ctx.fill();
+  ctx.beginPath(); ctx.ellipse(12, 15+lame, 5, 8, 0.2, 0, 7); ctx.fill();
   // ojos marrones brillantes
-  ctx.fillStyle = '#5b3a1e'; ctx.beginPath(); ctx.arc(4, -4, 3.4, 0, 7); ctx.fill();
-  ctx.fillStyle = '#fff'; ctx.beginPath(); ctx.arc(5, -5, 1.2, 0, 7); ctx.fill();
+  ctx.fillStyle = '#5b3a1e'; ctx.beginPath(); ctx.arc(2, -6, 3.4, 0, 7); ctx.fill();
+  ctx.fillStyle = '#fff'; ctx.beginPath(); ctx.arc(3, -7, 1.2, 0, 7); ctx.fill();
   if(t.muerto){ ctx.strokeStyle='#efe7da'; ctx.lineWidth=2;
-    ctx.beginPath(); ctx.moveTo(1,-7); ctx.lineTo(8,-1); ctx.moveTo(8,-7); ctx.lineTo(1,-1); ctx.stroke(); }
+    ctx.beginPath(); ctx.moveTo(-1,-9); ctx.lineTo(6,-3); ctx.moveTo(6,-9); ctx.lineTo(-1,-3); ctx.stroke(); }
   // orejas de rosa dobladas
   ctx.fillStyle = '#332b29';
   ctx.beginPath(); ctx.moveTo(-14,-13); ctx.quadraticCurveTo(-20,-26,-8,-22); ctx.quadraticCurveTo(-6,-16,-14,-13); ctx.fill();
@@ -776,6 +830,40 @@ function dibujaGato(){
   ctx.beginPath(); ctx.moveTo(18,-22); ctx.quadraticCurveTo(30,-34, 26,-42); ctx.stroke();
   ctx.restore();
 }
+/* Rasgos faciales compartidos: ojos con brillo, cejas, nariz y sonrisa */
+function caraRasgos(cx, cy, r, o={}){
+  // ojos (esclerótica + pupila)
+  ctx.fillStyle = '#fff';
+  ctx.beginPath(); ctx.ellipse(cx-r*0.38, cy-r*0.15, r*0.22, r*0.26, 0, 0, 7); ctx.fill();
+  ctx.beginPath(); ctx.ellipse(cx+r*0.38, cy-r*0.15, r*0.22, r*0.26, 0, 0, 7); ctx.fill();
+  ctx.fillStyle = o.ojos || '#3a2a1a';
+  ctx.beginPath(); ctx.arc(cx-r*0.33, cy-r*0.12, r*0.12, 0, 7); ctx.fill();
+  ctx.beginPath(); ctx.arc(cx+r*0.43, cy-r*0.12, r*0.12, 0, 7); ctx.fill();
+  ctx.fillStyle = '#fff';
+  ctx.beginPath(); ctx.arc(cx-r*0.29, cy-r*0.17, r*0.045, 0, 7); ctx.fill();
+  ctx.beginPath(); ctx.arc(cx+r*0.47, cy-r*0.17, r*0.045, 0, 7); ctx.fill();
+  // cejas
+  ctx.strokeStyle = o.cejas || '#4a3520'; ctx.lineWidth = 1.4; ctx.lineCap = 'round';
+  ctx.beginPath(); ctx.moveTo(cx-r*0.55, cy-r*0.44); ctx.lineTo(cx-r*0.16, cy-r*0.52); ctx.stroke();
+  ctx.beginPath(); ctx.moveTo(cx+r*0.18, cy-r*0.52); ctx.lineTo(cx+r*0.58, cy-r*0.44); ctx.stroke();
+  // nariz
+  ctx.strokeStyle = 'rgba(90,55,35,0.4)'; ctx.lineWidth = 1.2;
+  ctx.beginPath(); ctx.moveTo(cx+r*0.04, cy-r*0.02); ctx.quadraticCurveTo(cx+r*0.14, cy+r*0.16, cx+r*0.02, cy+r*0.24); ctx.stroke();
+  // boca sonriente
+  ctx.strokeStyle = '#8a4b3a'; ctx.lineWidth = 1.5;
+  ctx.beginPath(); ctx.moveTo(cx-r*0.28, cy+r*0.44); ctx.quadraticCurveTo(cx, cy+r*0.64, cx+r*0.3, cy+r*0.44); ctx.stroke();
+  // extras
+  if(o.colorete){ ctx.fillStyle = 'rgba(240,139,160,0.45)';
+    ctx.beginPath(); ctx.ellipse(cx-r*0.58, cy+r*0.24, r*0.17, r*0.11, 0, 0, 7); ctx.fill();
+    ctx.beginPath(); ctx.ellipse(cx+r*0.58, cy+r*0.24, r*0.17, r*0.11, 0, 0, 7); ctx.fill(); }
+  if(o.pecas){ ctx.fillStyle = 'rgba(140,90,50,0.7)';
+    for(const [dx,dy] of [[-0.3,0.24],[-0.14,0.3],[0.2,0.26],[0.34,0.32]]){
+      ctx.beginPath(); ctx.arc(cx+dx*r, cy+dy*r, 0.8, 0, 7); ctx.fill(); } }
+  if(o.arrugas){ ctx.strokeStyle = 'rgba(0,0,0,0.22)'; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(cx-r*0.45, cy-r*0.72); ctx.quadraticCurveTo(cx, cy-r*0.84, cx+r*0.45, cy-r*0.72); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(cx-r*0.62, cy+r*0.05); ctx.lineTo(cx-r*0.5, cy+r*0.12); ctx.stroke(); }
+}
+
 function dibujaPersona(p, tipo){
   if(!p) return;
   ctx.save(); ctx.translate(p.x, GROUND);
@@ -783,48 +871,98 @@ function dibujaPersona(p, tipo){
     ctx.fillStyle='#3f5a78'; ctx.fillRect(-8,-80,16,46);            // camisa (delgado)
     ctx.fillStyle='#2c3440'; ctx.fillRect(-7,-36,6,36); ctx.fillRect(2,-36,6,36); // vaqueros
     ctx.fillStyle='#e8b98f'; ctx.beginPath(); ctx.arc(0,-92,11,0,7); ctx.fill(); // cara
-    ctx.fillStyle='#241a12';                                        // pelo moreno
-    ctx.beginPath(); ctx.arc(0,-96,11.5,Math.PI,0); ctx.fill();
-    ctx.fillRect(-11,-98,23,5);
-    ctx.fillStyle='#241a12'; ctx.fillRect(-7,-89,14,3.5);           // bigote
+    caraRasgos(0,-92,11,{cejas:'#241a12'});
+    ctx.fillStyle='#241a12';                                        // pelo moreno con volumen
+    ctx.beginPath(); ctx.arc(0,-96,11.5,Math.PI*0.95,Math.PI*2.05); ctx.fill();
+    ctx.fillRect(-11.5,-100,23,6);
+    ctx.beginPath(); ctx.arc(-9,-95,3.5,0,7); ctx.fill();           // patilla
+    ctx.fillStyle='#241a12'; ctx.fillRect(-5.5,-87.5,11,3);         // bigote sobre la sonrisa
     ctx.strokeStyle='#3f5a78'; ctx.lineWidth=5; ctx.lineCap='round';
     ctx.beginPath(); ctx.moveTo(8,-72); ctx.lineTo(22,-90); ctx.stroke();  // brazo lanzando
   }else if(tipo==='ella'){  // Ella: delgadita, piel clara, pelo castaño claro
     ctx.fillStyle='#eba9c0'; ctx.fillRect(-7,-70,14,40);            // vestido rosa (delgadita)
     ctx.fillStyle='#f3d9c4'; ctx.fillRect(-5,-30,4,30); ctx.fillRect(1,-30,4,30); // piernas piel clara
     ctx.fillStyle='#f3d9c4'; ctx.beginPath(); ctx.arc(0,-82,10,0,7); ctx.fill(); // cara piel clara
+    caraRasgos(0,-82,10,{cejas:'#8d6f45',colorete:true});
     ctx.fillStyle='#b08d5b';                                        // melena castaño claro
-    ctx.beginPath(); ctx.arc(0,-86,11,Math.PI,0); ctx.fill();
-    ctx.fillRect(-11,-86,5,26); ctx.fillRect(6,-86,5,26);
+    ctx.beginPath(); ctx.arc(0,-86,11,Math.PI*0.9,Math.PI*2.1); ctx.fill();
+    ctx.fillRect(-11,-86,4.5,28); ctx.fillRect(6.5,-86,4.5,28);
+    ctx.beginPath(); ctx.arc(-8,-90,4,0,7); ctx.fill();             // mechón
     ctx.strokeStyle='#eba9c0'; ctx.lineWidth=5; ctx.lineCap='round';
     ctx.beginPath(); ctx.moveTo(7,-62); ctx.lineTo(19,-80); ctx.stroke();   // saludando
   }else if(tipo==='senyora'){  // vecina del parque
     ctx.fillStyle='#8e6fae'; ctx.fillRect(-9,-64,18,38);            // vestido lila
     ctx.fillStyle='#e8b98f'; ctx.fillRect(-6,-26,5,26); ctx.fillRect(1,-26,5,26);
     ctx.fillStyle='#e8b98f'; ctx.beginPath(); ctx.arc(0,-76,10,0,7); ctx.fill();
+    caraRasgos(0,-76,10,{cejas:'#8a8378',colorete:true,arrugas:true});
     ctx.fillStyle='#bfb8ae';                                        // pelo gris con moño
-    ctx.beginPath(); ctx.arc(0,-80,10.5,Math.PI,0); ctx.fill();
+    ctx.beginPath(); ctx.arc(0,-80,10.5,Math.PI*0.9,Math.PI*2.1); ctx.fill();
     ctx.beginPath(); ctx.arc(0,-90,5,0,7); ctx.fill();
+    ctx.fillStyle='#e2586e'; ctx.beginPath(); ctx.arc(4,-89,1.8,0,7); ctx.fill();  // florecilla en el moño
     ctx.fillStyle='#5c3a22';                                        // bolso
     ctx.fillRect(9,-52,10,9);
-  }else if(tipo==='chico'){    // chaval con gorra
+  }else if(tipo==='chico'){    // chaval con gorra y pecas
     ctx.fillStyle='#3e8e5a'; ctx.fillRect(-8,-64,16,36);            // camiseta verde
     ctx.fillStyle='#2c3440'; ctx.fillRect(-7,-28,6,28); ctx.fillRect(2,-28,6,28);
     ctx.fillStyle='#d9a878'; ctx.beginPath(); ctx.arc(0,-76,10,0,7); ctx.fill();
+    caraRasgos(0,-76,10,{cejas:'#5c3a1c',pecas:true});
     ctx.fillStyle='#c23b3b';                                        // gorra roja
     ctx.beginPath(); ctx.arc(0,-80,10.5,Math.PI,0); ctx.fill();
     ctx.fillRect(0,-82,16,4);                                       // visera
+  }else if(tipo==='runner'){   // 🏃‍♀️ corredora con coleta
+    ctx.fillStyle='#37b8b0'; ctx.fillRect(-7,-66,14,26);            // top deportivo
+    ctx.fillStyle='#2c3440'; ctx.fillRect(-6,-40,5,40); ctx.fillRect(1,-40,5,40); // mallas
+    ctx.fillStyle='#ff7a59'; ctx.fillRect(-7,-4,7,4); ctx.fillRect(1,-4,7,4);     // zapas naranjas
+    ctx.fillStyle='#e8b98f'; ctx.beginPath(); ctx.arc(0,-78,10,0,7); ctx.fill();
+    caraRasgos(0,-78,10,{cejas:'#241a12',colorete:true});
+    ctx.fillStyle='#241a12';                                        // pelo con coleta al aire
+    ctx.beginPath(); ctx.arc(0,-82,10.5,Math.PI*0.9,Math.PI*2.1); ctx.fill();
+    ctx.beginPath(); ctx.moveTo(-9,-86); ctx.quadraticCurveTo(-20,-84,-22,-72);
+    ctx.quadraticCurveTo(-16,-76,-11,-79); ctx.fill();              // coleta
+    ctx.fillStyle='#ffd23f'; ctx.fillRect(-10.5,-86,21,3);          // cinta del pelo
+    ctx.strokeStyle='#37b8b0'; ctx.lineWidth=5; ctx.lineCap='round';
+    ctx.beginPath(); ctx.moveTo(6,-58); ctx.lineTo(14,-48); ctx.stroke();  // brazo en carrera
+  }else if(tipo==='nino'){     // 👦 niño pequeño con globo rojo
+    ctx.fillStyle='#f2c14e'; ctx.fillRect(-6,-42,12,22);            // camiseta amarilla
+    ctx.fillStyle='#4a6fa5'; ctx.fillRect(-5,-20,4,20); ctx.fillRect(1,-20,4,20); // pantalón corto
+    ctx.fillStyle='#d9a878'; ctx.beginPath(); ctx.arc(0,-52,8.5,0,7); ctx.fill();
+    caraRasgos(0,-52,8.5,{cejas:'#5c3a1c',pecas:true,colorete:true});
+    ctx.fillStyle='#5c3a1c';                                        // pelo revuelto
+    ctx.beginPath(); ctx.arc(0,-56,9,Math.PI*0.95,Math.PI*2.05); ctx.fill();
+    ctx.beginPath(); ctx.arc(-4,-62,2.5,0,7); ctx.arc(2,-63,2.5,0,7); ctx.fill();
+    // globo rojo 🎈
+    ctx.strokeStyle='rgba(80,60,40,0.7)'; ctx.lineWidth=1.5;
+    ctx.beginPath(); ctx.moveTo(8,-44); ctx.quadraticCurveTo(13,-58,12,-74); ctx.stroke();
+    ctx.fillStyle='#e2483c'; ctx.beginPath(); ctx.ellipse(12,-82,8,10,0,0,7); ctx.fill();
+    ctx.fillStyle='rgba(255,255,255,0.5)'; ctx.beginPath(); ctx.ellipse(9.5,-85,2.5,3.5,-0.4,0,7); ctx.fill();
+  }else if(tipo==='abuela'){   // 👵 abuela con rebeca y bolso
+    ctx.fillStyle='#d98ca6'; ctx.fillRect(-10,-62,20,36);           // rebeca rosa
+    ctx.fillStyle='#7a6a80'; ctx.fillRect(-8,-26,7,26); ctx.fillRect(1,-26,7,26); // falda/medias
+    ctx.fillStyle='#e8b98f'; ctx.beginPath(); ctx.arc(0,-74,10.5,0,7); ctx.fill();
+    caraRasgos(0,-74,10.5,{cejas:'#a8a099',colorete:true,arrugas:true});
+    ctx.fillStyle='#e8e2d8';                                        // pelo blanco con moño
+    ctx.beginPath(); ctx.arc(0,-78,11,Math.PI*0.9,Math.PI*2.1); ctx.fill();
+    ctx.beginPath(); ctx.arc(0,-88,4.5,0,7); ctx.fill();
+    // gafas redondas doradas
+    ctx.strokeStyle='#b9973f'; ctx.lineWidth=1.8;
+    ctx.beginPath(); ctx.arc(-4,-76,3.4,0,7); ctx.stroke();
+    ctx.beginPath(); ctx.arc(4.5,-76,3.4,0,7); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(-0.8,-76); ctx.lineTo(1.2,-76); ctx.stroke();
+    ctx.fillStyle='#8e4a5c'; ctx.fillRect(10,-48,10,10);            // bolso granate
+    ctx.strokeStyle='#8e4a5c'; ctx.lineWidth=2;
+    ctx.beginPath(); ctx.arc(15,-48,4,Math.PI,0); ctx.stroke();     // asa
   }else{                // Abuelo: gafas de pasta negras y bigote
     ctx.fillStyle='#7a6a52'; ctx.fillRect(-10,-68,20,40);           // chaqueta de punto
     ctx.fillStyle='#5b5147'; ctx.fillRect(-8,-30,7,30); ctx.fillRect(1,-30,7,30); // pantalón
     ctx.fillStyle='#e8b98f'; ctx.beginPath(); ctx.arc(0,-80,11,0,7); ctx.fill(); // cara
+    caraRasgos(0,-80,11,{cejas:'#b8b3aa',arrugas:true});
     ctx.fillStyle='#d8d3ca';                                        // pelo canoso
     ctx.beginPath(); ctx.arc(0,-84,11.5,Math.PI,0); ctx.fill();
     // gafas de pasta negras
     ctx.strokeStyle='#151515'; ctx.lineWidth=2.6;
     ctx.strokeRect(-9,-84,8,7); ctx.strokeRect(1,-84,8,7);
     ctx.beginPath(); ctx.moveTo(-1,-81); ctx.lineTo(1,-81); ctx.stroke();   // puente
-    ctx.fillStyle='#d8d3ca'; ctx.fillRect(-7,-74,14,3.5);           // bigote canoso
+    ctx.fillStyle='#d8d3ca'; ctx.fillRect(-6,-74.5,12,3.5);         // bigote canoso sobre la sonrisa
     // bastón
     ctx.strokeStyle='#8a5a30'; ctx.lineWidth=4; ctx.lineCap='round';
     ctx.beginPath(); ctx.moveTo(-14,-52); ctx.lineTo(-16,0); ctx.stroke();
@@ -920,6 +1058,38 @@ function iniciarMusica(){
   if(!mute) musica.play().catch(()=>{});   // si no hay musica.mp3, no pasa nada
 }
 
+/* ================= PAUSA / AJUSTES ⚙️ ================= */
+document.getElementById('btnAjustes').addEventListener('pointerdown', e=>{
+  e.stopPropagation();
+  if(estado !== 'playing') return;
+  estado = 'pausa';
+  document.getElementById('pausaScr').classList.remove('oculto');
+  musica.pause();
+});
+document.getElementById('btnSeguir').addEventListener('pointerdown', e=>{
+  e.stopPropagation();
+  estado = 'playing'; document.getElementById('pausaScr').classList.add('oculto');
+  ultimoT = performance.now(); if(!mute) musica.play().catch(()=>{});
+});
+document.getElementById('btnReiniciar').addEventListener('pointerdown', e=>{
+  e.stopPropagation();
+  document.getElementById('pausaScr').classList.add('oculto');
+  reset(); estado = 'playing'; ultimoT = performance.now(); iniciarMusica();
+});
+document.getElementById('btnSalirMenu').addEventListener('pointerdown', e=>{
+  e.stopPropagation();
+  document.getElementById('pausaScr').classList.add('oculto');
+  reset(); estado = 'menu'; musica.pause();
+  pintaTienda();                                       // refresca la hucha del menú
+  document.getElementById('menu').classList.remove('oculto');
+});
+document.getElementById('btnSesion').addEventListener('pointerdown', e=>{
+  e.stopPropagation();
+  if(!fb.listo) return;
+  if(fb.user) firebase.auth().signOut();
+  else fb.entrar();
+});
+
 /* ================= FIREBASE (récords online) ================= */
 const fb = { listo:false, user:null,
   async init(){
@@ -930,17 +1100,26 @@ const fb = { listo:false, user:null,
     await carga('https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore-compat.js');
     firebase.initializeApp(firebaseConfig);
     this.listo = true;
+    this.provider = new firebase.auth.GoogleAuthProvider();
+    this.provider.setCustomParameters({ prompt: 'select_account' });   // deja ELEGIR la cuenta
     document.getElementById('authBar').classList.remove('oculto');
     firebase.auth().onAuthStateChanged(u=>{
       this.user = u;
-      document.getElementById('quien').textContent = u ? '👋 ' + (u.displayName||'').split(' ')[0] : '';
+      const nombre = u ? (u.displayName||'').split(' ')[0] : '';
+      document.getElementById('quien').textContent = u ? '👋 ' + nombre : '';
       document.getElementById('btnLogin').style.display = u ? 'none' : '';
+      const bs = document.getElementById('btnSesion');
+      bs.style.display = '';
+      bs.textContent = u ? ('🚪 Cerrar sesión (' + nombre + ')') : '🔑 Iniciar sesión con Google';
       if(u) this.top();                       // al entrar, carga el Top 10 directamente
     });
     document.getElementById('btnLogin').addEventListener('pointerdown', e=>{
       e.stopPropagation();
-      firebase.auth().signInWithPopup(new firebase.auth.GoogleAuthProvider());
+      this.entrar();
     });
+  },
+  entrar(){
+    firebase.auth().signInWithPopup(this.provider);
   },
   async guardar(p){
     try{
@@ -974,7 +1153,7 @@ fb.init();
   const x = c.getContext('2d');
   // fondo atardecer redondeado
   const g = x.createLinearGradient(0,0,0,512);
-  g.addColorStop(0,'#2b1d4e'); g.addColorStop(1,'#a3506e');
+  g.addColorStop(0,'#3aa0e8'); g.addColorStop(1,'#ffe08a');
   x.fillStyle = g;
   x.beginPath(); x.roundRect(0,0,512,512,110); x.fill();
   // cara de Tote de frente
@@ -1008,8 +1187,8 @@ fb.init();
   const man = {
     name: 'Tote Runner', short_name: 'Tote',
     description: 'Tote, el staffy más bueno del parque, corre y salta',
-    display: 'standalone', orientation: 'any',
-    background_color: '#2b1d4e', theme_color: '#2b1d4e',
+    display: 'standalone', orientation: 'landscape',
+    background_color: '#3aa0e8', theme_color: '#3aa0e8',
     start_url: location.href, scope: new URL('.', location.href).href,
     icons: [
       { src: icono, sizes: '512x512', type: 'image/png', purpose: 'any' },

@@ -103,7 +103,7 @@
   <div class="buff" id="bTurbo">🐱 ¡TURBO! x2 puntos</div>
   <div class="buff" id="bEscudo">🌭 Escudo de Frank</div>
   <div class="buff" id="bAmor">❤️ Caricias x2</div>
-  <div class="buff" id="bCalma">🍪 Calma del abuelo</div>
+  <div class="buff" id="bCalma">🍪 Galleta del Maestro</div>
 </div>
 <div id="banner" class="pix">¡GATO! 🐱<span id="bannerSub">¡Tote se vuelve loco!</span></div>
 
@@ -123,6 +123,7 @@
     <button class="btn" id="btnTienda">🛍️ Tienda de Tote · 🦴 <span id="menuBanco">0</span></button>
     <div id="authBar" class="oculto">
       <button class="btn" id="btnLogin">🔑 Entrar con Google</button>
+      <button class="btn" id="btnCambiar" style="display:none">🔁 Cambiar de cuenta</button>
       <div id="quien"></div>
     </div>
     <div class="tap pix">— TOCA PARA EMPEZAR —</div>
@@ -239,6 +240,7 @@ const sfx = {
   golpe: ()=>beep(120,0.25,'sawtooth',0.2,-60),
   escudo:()=>beep(200,0.15,'square',0.15,120),
   smash: ()=>beep(520,0.12,'square',0.12,-320),
+  ladra: ()=>{beep(190,0.09,'square',0.24,-50);setTimeout(()=>beep(160,0.11,'square',0.24,-60),130);},
   pelos: ()=>{beep(880,0.05,'triangle',0.12);setTimeout(()=>beep(1320,0.06,'triangle',0.12),50)}
 };
 document.getElementById('btnMute').addEventListener('pointerdown', e=>{
@@ -364,11 +366,14 @@ function spawnObstaculo(){
            + Math.max(0, (CFG.rampa + 6 - jugando)) * CFG.gapExtraIni;   // modo enganche: mucho aire al principio
 }
 function spawnHuesos(){
-  const n = Math.random()<0.4 ? 3 : 1;
-  const enAire = Math.random()<0.45;
-  for(let i=0;i<n;i++)
-    entidades.push({tipo:'hueso', x: W+80 + i*46, y: enAire ? GROUND-120 - Math.sin(i)*14 : GROUND-26, w:30, h:16, fase: Math.random()*6});
-  tHueso = rnd(1.6, 3.4);
+  const r = Math.random();
+  const n = r < 0.35 ? 5 : r < 0.7 ? 3 : 1;          // tandas más gordas
+  const enAire = Math.random() < 0.45;
+  for(let i=0;i<n;i++){
+    const arco = enAire ? Math.sin((i/(n-1||1))*Math.PI)*26 : 0;   // en el aire forman arco (ideal para combos)
+    entidades.push({tipo:'hueso', x: W+80 + i*46, y: enAire ? GROUND-108-arco : GROUND-26, w:30, h:16, fase: Math.random()*6});
+  }
+  tHueso = rnd(1.0, 2.2);                             // y llegan más a menudo
 }
 function spawnGato(){
   gato = { x: W+40, anim: 0 };
@@ -376,6 +381,8 @@ function spawnGato(){
   document.getElementById('banner').classList.add('on');
   document.getElementById('bTurbo').style.display='block';
   sfx.gato();
+  setTimeout(()=>sfx.ladra(), 250);                              // 🐕 ¡Tote lo ha visto y LADRA!
+  flota('¡GUAU GUAU!', tote.x + 10, tote.y - 115, '#fffdf2');
   setTimeout(()=>document.getElementById('banner').classList.remove('on'), 1600);
   tGato = rnd(14, 24);
 }
@@ -980,23 +987,36 @@ function dibujaPersona(p, tipo){
     ctx.fillStyle='#8e4a5c'; ctx.fillRect(10,-48,10,10);            // bolso granate
     ctx.strokeStyle='#8e4a5c'; ctx.lineWidth=2;
     ctx.beginPath(); ctx.arc(15,-48,4,Math.PI,0); ctx.stroke();     // asa
-  }else{                // Abuelo: gafas de pasta negras y bigote
-    ctx.fillStyle='#7a6a52'; ctx.fillRect(-10,-68,20,40);           // chaqueta de punto
-    ctx.fillStyle='#5b5147'; ctx.fillRect(-8,-30,7,30); ctx.fillRect(1,-30,7,30); // pantalón
-    ctx.fillStyle='#e8b98f'; ctx.beginPath(); ctx.arc(0,-80,11,0,7); ctx.fill(); // cara
-    caraRasgos(0,-80,11,{cejas:'#b8b3aa',arrugas:true});
-    ctx.fillStyle='#d8d3ca';                                        // pelo canoso
-    ctx.beginPath(); ctx.arc(0,-84,11.5,Math.PI,0); ctx.fill();
-    // gafas de pasta negras
-    ctx.strokeStyle='#151515'; ctx.lineWidth=2.6;
-    ctx.strokeRect(-9,-84,8,7); ctx.strokeRect(1,-84,8,7);
-    ctx.beginPath(); ctx.moveTo(-1,-81); ctx.lineTo(1,-81); ctx.stroke();   // puente
-    ctx.fillStyle='#d8d3ca'; ctx.fillRect(-6,-74.5,12,3.5);         // bigote canoso sobre la sonrisa
-    // bastón
-    ctx.strokeStyle='#8a5a30'; ctx.lineWidth=4; ctx.lineCap='round';
-    ctx.beginPath(); ctx.moveTo(-14,-52); ctx.lineTo(-16,0); ctx.stroke();
-    ctx.strokeStyle='#7a6a52'; ctx.lineWidth=5;
-    ctx.beginPath(); ctx.moveTo(9,-60); ctx.lineTo(20,-76); ctx.stroke();   // brazo con la galleta
+  }else{                // El Maestro: 60 años, camisa de cuadros azul, bigote y entradas
+    // camisa de cuadros azul
+    ctx.fillStyle='#2e4d8f'; ctx.fillRect(-11,-70,22,42);
+    ctx.strokeStyle='rgba(170,205,255,0.5)'; ctx.lineWidth=1.3;
+    for(const dx of [-6,0,6]){ ctx.beginPath(); ctx.moveTo(dx,-70); ctx.lineTo(dx,-28); ctx.stroke(); }
+    ctx.strokeStyle='rgba(130,205,130,0.45)';
+    for(const dy of [-62,-50,-38]){ ctx.beginPath(); ctx.moveTo(-11,dy); ctx.lineTo(11,dy); ctx.stroke(); }
+    ctx.fillStyle='#24407a';                                        // cuello de la camisa
+    ctx.beginPath(); ctx.moveTo(-6,-70); ctx.lineTo(0,-63); ctx.lineTo(6,-70); ctx.closePath(); ctx.fill();
+    ctx.fillStyle='#4a4a52'; ctx.fillRect(-8,-28,7,28); ctx.fillRect(1,-28,7,28); // pantalón
+    // cabeza
+    ctx.fillStyle='#e8b98f'; ctx.beginPath(); ctx.arc(0,-82,11,0,7); ctx.fill();
+    caraRasgos(0,-82,11,{cejas:'#3d2f22'});
+    // cejas pobladas marca de la casa
+    ctx.strokeStyle='#3d2f22'; ctx.lineWidth=2.6; ctx.lineCap='round';
+    ctx.beginPath(); ctx.moveTo(-6.5,-87); ctx.lineTo(-1.5,-88.2); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(2,-88.2); ctx.lineTo(7,-87); ctx.stroke();
+    // entradas: calva arriba, pelo corto castaño claro a los lados
+    ctx.fillStyle='#b08d5b';
+    ctx.beginPath(); ctx.arc(-8.5,-86,4.4,0,7); ctx.fill();
+    ctx.beginPath(); ctx.arc(8.5,-86,4.4,0,7); ctx.fill();
+    ctx.fillStyle='rgba(176,141,91,0.5)';                           // pelusilla fina arriba
+    ctx.beginPath(); ctx.arc(0,-88,9.5,Math.PI*1.2,Math.PI*1.8); ctx.fill();
+    // bigote poblado castaño-canoso sobre la sonrisa
+    ctx.fillStyle='#6e5a44';
+    ctx.beginPath(); ctx.ellipse(-3.2,-77,4.2,2.1,0.18,0,7); ctx.fill();
+    ctx.beginPath(); ctx.ellipse(3.2,-77,4.2,2.1,-0.18,0,7); ctx.fill();
+    // brazo ofreciendo la galleta
+    ctx.strokeStyle='#2e4d8f'; ctx.lineWidth=5; ctx.lineCap='round';
+    ctx.beginPath(); ctx.moveTo(9,-60); ctx.lineTo(20,-76); ctx.stroke();
   }
   ctx.restore();
 }
@@ -1129,16 +1149,15 @@ const fb = { listo:false, user:null,
     await carga('https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore-compat.js');
     firebase.initializeApp(firebaseConfig);
     this.listo = true;
-    // Sin sesión guardada: al abrir el juego SIEMPRE se ofrece iniciar sesión
-    firebase.auth().setPersistence(firebase.auth.Auth.Persistence.NONE).catch(()=>{});
     this.provider = new firebase.auth.GoogleAuthProvider();
     this.provider.setCustomParameters({ prompt: 'select_account' });   // deja ELEGIR la cuenta
     document.getElementById('authBar').classList.remove('oculto');
     firebase.auth().onAuthStateChanged(u=>{
       this.user = u;
       const nombre = u ? (u.displayName||'').split(' ')[0] : '';
-      document.getElementById('quien').textContent = u ? '👋 ' + nombre : '';
-      document.getElementById('btnLogin').style.display = u ? 'none' : '';
+      document.getElementById('quien').textContent = u ? ('👋 Jugando como ' + nombre) : '';
+      document.getElementById('btnLogin').style.display   = u ? 'none' : '';
+      document.getElementById('btnCambiar').style.display = u ? '' : 'none';
       const bs = document.getElementById('btnSesion');
       bs.style.display = '';
       bs.textContent = u ? ('🚪 Cerrar sesión (' + nombre + ')') : '🔑 Iniciar sesión con Google';
@@ -1147,6 +1166,10 @@ const fb = { listo:false, user:null,
     document.getElementById('btnLogin').addEventListener('pointerdown', e=>{
       e.stopPropagation();
       this.entrar();
+    });
+    document.getElementById('btnCambiar').addEventListener('pointerdown', e=>{
+      e.stopPropagation();
+      firebase.auth().signOut().then(()=> this.entrar()).catch(()=>{});   // cambia de cuenta al vuelo
     });
   },
   entrar(){

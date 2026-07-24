@@ -3,7 +3,7 @@
    Guarda el juego y las fuentes en caché para
    poder jugar sin conexión una vez visitado.
    ============================================ */
-const CACHE = 'tote-runner-v8';
+const CACHE = 'tote-runner-v9';
 const BASE = ['./', './index.html'];
 
 // Instala: guarda el juego en caché

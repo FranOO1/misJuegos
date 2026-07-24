@@ -1,49 +1,1265 @@
-/* ============================================
-   🐶 Tote Runner — Service Worker (modo offline)
-   Guarda el juego y las fuentes en caché para
-   poder jugar sin conexión una vez visitado.
-   ============================================ */
-const CACHE = 'tote-runner-v8';
-const BASE = ['./', './index.html'];
 
-// Instala: guarda el juego en caché
-self.addEventListener('install', e => {
-  e.waitUntil(
-    caches.open(CACHE).then(c => c.addAll(BASE)).then(() => self.skipWaiting())
-  );
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<meta name="theme-color" content="#3aa0e8">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Tote Runner">
+<title>Tote Runner 🦴</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&family=Nunito:wght@600;800&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --cielo1:#3aa0e8; --cielo2:#7fd0f2; --cielo3:#fff3c4;
+    --hueso:#fffbef; --rosa:#f08ba0; --verde:#3f9d4a;
+  }
+  *{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+  html,body{height:100%;overflow:hidden;background:var(--cielo1);touch-action:none;
+    font-family:'Nunito',system-ui,sans-serif;color:var(--hueso);user-select:none;-webkit-user-select:none}
+  #wrap{position:fixed;inset:0}
+  canvas{display:block;width:100%;height:100%}
+  .pix{font-family:'Press Start 2P',monospace}
+
+  /* ---- HUD ---- */
+  #hud{position:fixed;top:calc(env(safe-area-inset-top,0px) + 10px);left:0;right:0;
+    display:flex;justify-content:space-between;align-items:flex-start;padding:0 14px;pointer-events:none}
+  #hudL{display:flex;gap:8px;pointer-events:auto}
+  #hudR{text-align:right}
+  #score{font-size:20px;text-shadow:2px 2px 0 rgba(0,0,0,.45)}
+  #record{font-size:9px;opacity:.85;margin-top:6px;text-shadow:1px 1px 0 rgba(0,0,0,.45)}
+  #huesos{font-size:12px;margin-top:6px;text-shadow:1px 1px 0 rgba(0,0,0,.45)}
+  .chip{background:rgba(0,0,0,.35);border:2px solid rgba(245,232,200,.5);border-radius:12px;
+    width:40px;height:40px;font-size:18px;display:grid;place-items:center;color:var(--hueso)}
+  #estado{position:fixed;top:calc(env(safe-area-inset-top,0px) + 62px);left:14px;display:flex;flex-direction:column;gap:4px;pointer-events:none}
+  .buff{font-size:9px;background:rgba(0,0,0,.4);border-radius:8px;padding:5px 8px;display:none}
+
+  /* ---- Banner gato ---- */
+  #banner{position:fixed;top:26%;left:0;right:0;text-align:center;font-size:clamp(16px,5vw,28px);
+    color:#ffd23f;text-shadow:3px 3px 0 #a3320b;pointer-events:none;opacity:0;transform:scale(.6);
+    transition:opacity .15s,transform .2s cubic-bezier(.34,1.56,.64,1)}
+  #banner.on{opacity:1;transform:scale(1)}
+  #bannerSub{font-family:'Nunito';font-weight:800;font-size:.55em;display:block;margin-top:10px;color:var(--hueso);text-shadow:2px 2px 0 rgba(0,0,0,.5)}
+
+  /* ---- Pantallas ---- */
+  .screen{position:fixed;inset:0;display:grid;place-items:center;background:rgba(24,14,48,.72);
+    backdrop-filter:blur(3px);z-index:10}
+  .panel{text-align:center;padding:28px 22px;max-width:420px;width:88%}
+  #titulo{font-size:clamp(22px,7vw,40px);line-height:1.35;color:var(--hueso);
+    text-shadow:0 4px 0 #a3320b, 0 8px 18px rgba(0,0,0,.5)}
+  #titulo .t2{color:#ffd23f}
+  .sub{font-weight:800;font-size:15px;margin-top:16px;opacity:.95}
+  .howto{margin-top:18px;font-size:13px;font-weight:600;line-height:1.9;background:rgba(0,0,0,.3);
+    border-radius:14px;padding:12px 14px;text-align:left}
+  .tap{margin-top:22px;font-size:11px;animation:parp 1.1s infinite}
+  @keyframes parp{50%{opacity:.25}}
+  #goTitulo{font-size:clamp(18px,6vw,30px);color:var(--rosa);text-shadow:0 3px 0 rgba(0,0,0,.5)}
+  .stat{font-size:13px;margin-top:14px}
+  .stat b{color:#ffd23f;font-size:17px}
+  #nuevoRecord{display:none;margin-top:14px;font-size:12px;color:#7CFF6B;text-shadow:1px 1px 0 rgba(0,0,0,.6);animation:parp .8s infinite}
+  #pausa{display:none}
+  button.btn{pointer-events:auto;margin-top:18px;font-family:'Nunito';font-weight:800;font-size:14px;
+    background:var(--hueso);color:#3b2a1a;border:0;border-radius:14px;padding:12px 20px;box-shadow:0 4px 0 #b09b6f;cursor:pointer}
+  button.btn:active{transform:translateY(3px);box-shadow:0 1px 0 #b09b6f}
+  #authBar{margin-top:14px;font-size:12px;font-weight:700;opacity:.9}
+  #lb{margin-top:14px;text-align:left;font-size:12px;font-weight:700;display:none;background:rgba(0,0,0,.3);border-radius:12px;padding:10px 14px;max-height:32vh;overflow:auto}
+  #lb li{margin:6px 0;list-style:none}
+  .oculto{display:none!important}
+
+  /* ---- Tienda ---- */
+  .item{display:flex;align-items:center;gap:10px;background:rgba(0,0,0,.3);border-radius:12px;
+    padding:10px 12px;margin:8px 0;font-size:13px;font-weight:800;text-align:left}
+  .item .bola{width:22px;height:22px;border-radius:50%;border:2px solid rgba(245,232,200,.6);flex:none}
+  .item .nom{flex:1}
+  .item button{font-family:'Nunito';font-weight:800;font-size:12px;border:0;border-radius:10px;
+    padding:8px 12px;cursor:pointer;background:var(--hueso);color:#3b2a1a;box-shadow:0 3px 0 #b09b6f}
+  .item button:disabled{opacity:.45;box-shadow:none}
+  .item button.puesto{background:#7CFF6B;box-shadow:0 3px 0 #3f9636}
+
+  /* ---- Aviso de girar el móvil ---- */
+  #giraScr{display:none;position:fixed;inset:0;z-index:50;background:#2a6db3;
+    place-items:center;text-align:center;font-size:15px;line-height:2}
+  #giraScr .icono{font-size:52px;animation:gira 1.6s ease-in-out infinite}
+  @keyframes gira{0%,20%{transform:rotate(0)}60%,100%{transform:rotate(90deg)}}
+  @media (orientation: portrait) and (pointer: coarse){ #giraScr{display:grid} }
+</style>
+</head>
+<body>
+<div id="wrap"><canvas id="cv"></canvas></div>
+
+<!-- HUD -->
+<div id="hud">
+  <div id="hudL"><div class="chip" id="btnMute">🔊</div><div class="chip" id="btnAjustes">⚙️</div></div>
+  <div id="hudR">
+    <div id="score" class="pix">0</div>
+    <div id="huesos">🦴 0</div>
+    <div id="record" class="pix">RÉCORD 0</div>
+  </div>
+</div>
+<div id="estado">
+  <div class="buff" id="bTurbo">🐱 ¡TURBO! x2 puntos</div>
+  <div class="buff" id="bEscudo">🌭 Escudo de Frank</div>
+  <div class="buff" id="bAmor">❤️ Caricias x2</div>
+  <div class="buff" id="bCalma">🍪 Galleta del Maestro</div>
+</div>
+<div id="banner" class="pix">¡GATO! 🐱<span id="bannerSub">¡Tote se vuelve loco!</span></div>
+
+<!-- MENÚ -->
+<div class="screen" id="menu">
+  <div class="panel">
+    <div id="titulo" class="pix">TOTE<br><span class="t2">RUNNER</span></div>
+    <div class="sub">Tote, 12 años de staffy bueno 🐶<br>persiguiendo todo lo que se mueve</div>
+    <div class="howto">
+      👆 Toca para saltar · doble toque = doble salto<br>
+      ⬇️ Desliza hacia abajo (o flecha ↓) = caer a plomo<br>
+      🐦 ¡Cae ENCIMA de una paloma y rebotas con puntos!<br>
+      🔗 Encadena palomas y huesos sin pisar suelo = COMBO<br>
+      🐱 Gato = TURBO… ¡y si lo pillas por el suelo, MODO IMPARABLE!<br>
+      🌭 Salchicha = escudo · ❤️ Caricias = x2 · 🍪 Galleta = calma
+    </div>
+    <button class="btn" id="btnTienda">🛍️ Tienda de Tote · 🦴 <span id="menuBanco">0</span></button>
+    <div id="authBar" class="oculto">
+      <button class="btn" id="btnLogin">🔑 Entrar con Google</button>
+      <button class="btn" id="btnCambiar" style="display:none">🔁 Cambiar de cuenta</button>
+      <div id="quien"></div>
+    </div>
+    <div class="tap pix">— TOCA PARA EMPEZAR —</div>
+  </div>
+</div>
+
+<!-- GAME OVER -->
+<div class="screen oculto" id="gameover">
+  <div class="panel">
+    <div id="goTitulo" class="pix">¡AY, TOTE!</div>
+    <div class="stat pix">PUNTOS <b id="goScore">0</b></div>
+    <div class="stat pix">RÉCORD <b id="goRecord">0</b></div>
+    <div class="stat">🦴 Huesos de la partida: <b id="goHuesos">0</b> · Hucha total: <b id="goBanco">0</b></div>
+    <div id="nuevoRecord" class="pix">★ ¡NUEVO RÉCORD! ★</div>
+    <ol id="lb"></ol>
+    <div class="tap pix">— TOCA PARA REINTENTAR —</div>
+  </div>
+</div>
+
+<!-- PAUSA / AJUSTES ⚙️ -->
+<div class="screen oculto" id="pausaScr">
+  <div class="panel">
+    <div class="pix" style="font-size:18px">PAUSA</div>
+    <button class="btn" id="btnSeguir">▶️ Continuar</button><br>
+    <button class="btn" id="btnReiniciar">🔄 Reiniciar partida</button><br>
+    <button class="btn" id="btnSesion" style="display:none">🔑 Sesión</button><br>
+    <button class="btn" id="btnSalirMenu">🏠 Salir al menú</button>
+  </div>
+</div>
+
+<!-- GIRA EL MÓVIL 🔄 -->
+<div id="giraScr" class="pix">
+  <div><div class="icono">📱</div>GIRA EL MÓVIL<br><span style="font-size:10px;opacity:.85">Tote corre en horizontal</span></div>
+</div>
+
+<!-- TIENDA 🛍️ -->
+<div class="screen oculto" id="tienda">
+  <div class="panel">
+    <div class="pix" style="font-size:16px">🛍️ TIENDA</div>
+    <div class="stat">🦴 Hucha: <b id="tiendaBanco">0</b></div>
+    <div id="tiendaItems" style="margin-top:14px"></div>
+    <button class="btn" id="btnCerrarTienda">← Volver</button>
+  </div>
+</div>
+
+<!-- 🎵 Música de fondo (pon un "musica.mp3" en la misma carpeta) -->
+<audio id="musicaFondo" loop preload="auto" src="musica.mp3"></audio>
+
+<script>
+/* ============================================================
+   🔥 FIREBASE (opcional) — para récords online + login Google
+   ------------------------------------------------------------
+   1) En https://console.firebase.google.com crea (o reutiliza)
+      un proyecto, activa Authentication > Google y Firestore.
+   2) Pega aquí tu firebaseConfig y pon ENABLE_FIREBASE = true.
+   3) Regla Firestore sugerida (colección "toteRunner"):
+      match /toteRunner/{uid} {
+        allow read: if true;
+        allow write: if request.auth != null && request.auth.uid == uid;
+      }
+   ============================================================ */
+const ENABLE_FIREBASE = false;
+const firebaseConfig = {
+  apiKey: "PEGA_AQUI",
+  authDomain: "TU_PROYECTO.firebaseapp.com",
+  projectId: "TU_PROYECTO",
+  appId: "PEGA_AQUI"
+};
+
+/* ================= CONFIG DEL JUEGO ================= */
+const CFG = {
+  gravedad: 2600, salto: -880, dobleSalto: -800,
+  caidaRapida: 1900,                            // smash: caer a plomo
+  velIni: 200, velMax: 700,                     // empieza MUY suave
+  acelSuave: 2.5, acel: 14, rampa: 22,          // acel real entra a partir de ~22s
+  turboMult: 1.45, turboDur: 4.5, amorDur: 8, calmaDur: 5, calmaMult: 0.55,
+  gapMin: 300, gapMax: 560, gapExtraIni: 16,    // hueco extra al principio (px por segundo restante)
+  rebotePaloma: -500, hitStopMs: 45,            // juice
+  H: 480                                        // altura lógica
+};
+const GROUND = 388;
+
+/* ================= CANVAS ================= */
+const cv = document.getElementById('cv'), ctx = cv.getContext('2d');
+let W = 0, H = CFG.H, escala = 1;
+function resize(){
+  const dpr = Math.min(window.devicePixelRatio || 1, 2);
+  cv.width  = innerWidth * dpr; cv.height = innerHeight * dpr;
+  escala = (innerHeight * dpr) / CFG.H;
+  W = cv.width / escala;
+  ctx.setTransform(escala, 0, 0, escala, 0, 0);
+  ctx.imageSmoothingEnabled = true;
+}
+addEventListener('resize', resize); resize();
+
+/* ================= AUDIO ================= */
+let mute = false, AC = null;
+function beep(f, dur=0.08, tipo='square', vol=0.12, slide=0){
+  if(mute) return;
+  try{
+    AC = AC || new (window.AudioContext||window.webkitAudioContext)();
+    const o = AC.createOscillator(), g = AC.createGain();
+    o.type = tipo; o.frequency.value = f;
+    if(slide) o.frequency.linearRampToValueAtTime(f+slide, AC.currentTime+dur);
+    g.gain.value = vol; g.gain.exponentialRampToValueAtTime(0.001, AC.currentTime+dur);
+    o.connect(g); g.connect(AC.destination); o.start(); o.stop(AC.currentTime+dur);
+  }catch(e){}
+}
+const sfx = {
+  salto: ()=>beep(300,0.09,'square',0.1,180),
+  hueso: ()=>{beep(660,0.06,'triangle',0.14);setTimeout(()=>beep(990,0.07,'triangle',0.14),60)},
+  power: ()=>{beep(440,0.08,'sawtooth',0.1,220);setTimeout(()=>beep(880,0.1,'triangle',0.12),80)},
+  gato:  ()=>{beep(900,0.12,'sawtooth',0.12,-350)},
+  golpe: ()=>beep(120,0.25,'sawtooth',0.2,-60),
+  escudo:()=>beep(200,0.15,'square',0.15,120),
+  smash: ()=>beep(520,0.12,'square',0.12,-320),
+  ladra: ()=>{beep(190,0.09,'square',0.24,-50);setTimeout(()=>beep(160,0.11,'square',0.24,-60),130);},
+  pelos: ()=>{beep(880,0.05,'triangle',0.12);setTimeout(()=>beep(1320,0.06,'triangle',0.12),50)}
+};
+document.getElementById('btnMute').addEventListener('pointerdown', e=>{
+  e.stopPropagation(); mute = !mute;
+  document.getElementById('btnMute').textContent = mute ? '🔇' : '🔊';
+  const m = document.getElementById('musicaFondo');
+  if(mute) m.pause();
+  else if(estado === 'playing') m.play().catch(()=>{});
 });
 
-// Activa: limpia cachés de versiones antiguas
-self.addEventListener('activate', e => {
-  e.waitUntil(
-    caches.keys()
-      .then(ks => Promise.all(ks.filter(k => k !== CACHE).map(k => caches.delete(k))))
-      .then(() => self.clients.claim())
-  );
+/* ================= ESTADO ================= */
+let estado = 'menu';           // menu | playing | gameover | pausa
+let t0 = 0, jugando = 0;       // tiempo de partida
+let vel, distancia, puntos, huesosPartida;
+let tote, entidades, gato, frank, ella, abuelo;
+let turboT, amorT, calmaT, escudo, invulnT, sacudida;
+let proxObst, tHueso, tGato, tSalchi, tAmor, tAbuelo, peatones, tPeaton;
+let comboAereo, particulas, flotantes, estela, hitStop = 0;
+let tiendaAbierta = false;
+let record = +(localStorage.getItem('tote_record') || 0);
+let banco  = +(localStorage.getItem('tote_banco')  || 0);
+
+/* --- Tienda: collares de Tote --- */
+const COLLARES = {
+  negro:  { nombre:'Collar clásico', color:'#1c1c1c', precio:0    },
+  rojo:   { nombre:'Collar rojo',    color:'#c23b3b', precio:500  },
+  azul:   { nombre:'Collar azul',    color:'#3f6fb5', precio:800  },
+  dorado: { nombre:'Collar dorado',  color:'#ffd23f', precio:2000 }
+};
+let collaresMios = JSON.parse(localStorage.getItem('tote_collares') || '["negro"]');
+let collarSel = localStorage.getItem('tote_collar') || 'negro';
+if(!COLLARES[collarSel] || !collaresMios.includes(collarSel)) collarSel = 'negro';
+document.getElementById('record').textContent = 'RÉCORD ' + record;
+
+function reset(){
+  vel = CFG.velIni; distancia = 0; puntos = 0; huesosPartida = 0; jugando = 0;
+  turboT = 0; amorT = 0; calmaT = 0; escudo = false; invulnT = 0; sacudida = 0;
+  tote = { x: 95, y: GROUND, vy: 0, saltos: 0, enSuelo: true, anim: 0, muerto: false, smash: false };
+  entidades = []; gato = null; frank = null; ella = null; abuelo = null;
+  peatones = []; tPeaton = 2.5;
+  comboAereo = 0; particulas = []; flotantes = []; estela = []; hitStop = 0;
+  proxObst = 500; tHueso = 2; tGato = rnd(10, 16); tSalchi = rnd(16, 26); tAmor = rnd(20, 30); tAbuelo = rnd(24, 36);
+  actualizarHUD();
+  ['bTurbo','bEscudo','bAmor','bCalma'].forEach(id=>document.getElementById(id).style.display='none');
+}
+const rnd = (a,b)=>a + Math.random()*(b-a);
+
+/* ================= CONTROLES ================= */
+function accion(){
+  if(tiendaAbierta) return;                 // la tienda gestiona sus propios toques
+  if(estado === 'gameover' && !puedeReiniciar) return;   // aún no ha salido el cartel
+  if(estado === 'menu' || estado === 'gameover'){
+    reset(); estado = 'playing';
+    iniciarMusica();
+    aHorizontal();                          // 📱 pantalla completa + horizontal
+    document.getElementById('menu').classList.add('oculto');
+    document.getElementById('gameover').classList.add('oculto');
+    return;
+  }
+  if(estado === 'pausa'){
+    estado = 'playing'; document.getElementById('pausaScr').classList.add('oculto');
+    ultimoT = performance.now(); if(!mute) musica.play().catch(()=>{}); return;
+  }
+  if(estado === 'playing' && !tote.muerto){
+    if(musica.paused && !mute) musica.play().catch(()=>{});   // por si el navegador la bloqueó
+    if(tote.enSuelo){ tote.vy = CFG.salto; tote.enSuelo = false; tote.saltos = 1; sfx.salto(); }
+    else if(tote.saltos < 2){ tote.vy = CFG.dobleSalto; tote.saltos = 2; sfx.salto(); }
+  }
+}
+// 📱 Intenta poner el juego a pantalla completa y bloquear en horizontal
+function aHorizontal(){
+  try{
+    const el = document.documentElement;
+    const fs = el.requestFullscreen ? el.requestFullscreen() : Promise.resolve();
+    Promise.resolve(fs).then(()=> screen.orientation && screen.orientation.lock('landscape')).catch(()=>{});
+  }catch(e){}
+}
+// ⬇️ Caída rápida (smash): cancela el salto y cae a plomo
+function caidaRapida(){
+  if(estado === 'playing' && !tote.muerto && !tote.enSuelo){
+    tote.vy = Math.max(tote.vy, CFG.caidaRapida);
+    tote.smash = true;
+    sfx.smash();
+  }
+}
+addEventListener('pointerdown', accion);
+addEventListener('keydown', e=>{
+  if(e.code==='Space'||e.code==='ArrowUp'){ e.preventDefault(); accion(); }
+  if(e.code==='ArrowDown'){ e.preventDefault(); caidaRapida(); }
+});
+// deslizar hacia abajo en pantalla = caída rápida
+let touchY0 = null, smashHecho = false;
+addEventListener('pointerdown', e=>{ touchY0 = e.clientY; smashHecho = false; });
+addEventListener('pointermove', e=>{
+  if(touchY0 !== null && !smashHecho && e.clientY - touchY0 > 45){ smashHecho = true; caidaRapida(); }
+});
+addEventListener('pointerup', ()=>{ touchY0 = null; });
+// fallback táctil: en algunos Android el navegador cancela pointermove
+addEventListener('touchstart', e=>{ touchY0 = e.touches[0].clientY; smashHecho = false; }, {passive:true});
+addEventListener('touchmove', e=>{
+  if(touchY0 !== null && !smashHecho && e.touches[0].clientY - touchY0 > 45){ smashHecho = true; caidaRapida(); }
+}, {passive:true});
+addEventListener('touchend', ()=>{ touchY0 = null; }, {passive:true});
+document.addEventListener('visibilitychange', ()=>{
+  if(document.hidden && estado==='playing'){
+    estado='pausa'; document.getElementById('pausaScr').classList.remove('oculto');
+    document.getElementById('musicaFondo').pause();
+  }
 });
 
-// Estrategia: caché primero, y de fondo se actualiza desde la red
-self.addEventListener('fetch', e => {
-  if (e.request.method !== 'GET') return;
-  const u = e.request.url;
+/* ================= SPAWNS ================= */
+function spawnObstaculo(){
+  const r = Math.random();
+  const x = W + 60;
+  if(r < 0.30)      entidades.push({tipo:'seto',   x, y:GROUND, w:64, h:40});
+  else if(r < 0.55) entidades.push({tipo:'charco', x, y:GROUND, w: Math.round(Math.min(120, 68 + vel*0.09)), h:10});
+  else if(r < 0.75) entidades.push({tipo:'maceta', x, y:GROUND, w:36, h:42});
+  else {            // paloma: alta (no saltes) o baja (salta ya)
+    const alta = Math.random() < 0.55;
+    entidades.push({tipo:'paloma', x, y: alta ? GROUND-96 : GROUND-42, w:44, h:26, vx: rnd(60,140), ala:0});
+  }
+  proxObst = rnd(CFG.gapMin, CFG.gapMax) + vel * 0.32
+           + Math.max(0, (CFG.rampa + 6 - jugando)) * CFG.gapExtraIni;   // modo enganche: mucho aire al principio
+}
+function spawnHuesos(){
+  const r = Math.random();
+  const n = r < 0.35 ? 5 : r < 0.7 ? 3 : 1;          // tandas más gordas
+  const enAire = Math.random() < 0.45;
+  for(let i=0;i<n;i++){
+    const arco = enAire ? Math.sin((i/(n-1||1))*Math.PI)*26 : 0;   // en el aire forman arco (ideal para combos)
+    entidades.push({tipo:'hueso', x: W+80 + i*46, y: enAire ? GROUND-108-arco : GROUND-26, w:30, h:16, fase: Math.random()*6});
+  }
+  tHueso = rnd(1.0, 2.2);                             // y llegan más a menudo
+}
+function spawnGato(){
+  gato = { x: W+40, anim: 0 };
+  turboT = CFG.turboDur;
+  document.getElementById('banner').classList.add('on');
+  document.getElementById('bTurbo').style.display='block';
+  sfx.gato();
+  setTimeout(()=>sfx.ladra(), 250);                              // 🐕 ¡Tote lo ha visto y LADRA!
+  flota('¡GUAU GUAU!', tote.x + 10, tote.y - 115, '#fffdf2');
+  setTimeout(()=>document.getElementById('banner').classList.remove('on'), 1600);
+  tGato = rnd(14, 24);
+}
+function spawnSalchicha(){
+  frank = { x: W+30 };
+  entidades.push({tipo:'salchicha', x: W+110, y: GROUND-100, w:34, h:16, fase:0});
+  tSalchi = rnd(22, 36);
+}
+function spawnAmor(){
+  ella = { x: W+30 };
+  entidades.push({tipo:'corazon', x: W+105, y: GROUND-105, w:26, h:24, fase:0});
+  tAmor = rnd(26, 40);
+}
+function spawnGalleta(){
+  abuelo = { x: W+30 };
+  entidades.push({tipo:'galleta', x: W+105, y: GROUND-98, w:26, h:26, fase:0});
+  tAbuelo = rnd(30, 46);
+}
 
-  // Firebase (login/récords online) siempre va directo a la red
-  if (u.includes('firebasejs') ||
-      u.includes('firestore.googleapis.com') ||
-      u.includes('identitytoolkit.googleapis.com')) return;
+/* ================= UPDATE ================= */
+function update(dt){
+  jugando += dt;
+  const mult = (turboT > 0 ? CFG.turboMult : 1) * (calmaT > 0 ? CFG.calmaMult : 1);
+  // los primeros segundos apenas acelera; a partir de CFG.rampa entra la aceleración real
+  const acelAhora = jugando < CFG.rampa
+    ? CFG.acelSuave
+    : CFG.acelSuave + (CFG.acel - CFG.acelSuave) * Math.min(1, (jugando - CFG.rampa)/8);
+  vel = Math.min(CFG.velMax, vel + acelAhora*dt);
+  const v = vel * mult;
+  distancia += v * dt;
+  const pMult = (turboT>0 ? 2 : 1) * (amorT>0 ? 2 : 1);
+  puntos += v * dt * 0.055 * pMult;
 
-  e.respondWith(
-    caches.match(e.request).then(enCache => {
-      const desdeRed = fetch(e.request).then(resp => {
-        if (resp && resp.ok) {
-          const copia = resp.clone();
-          caches.open(CACHE).then(c => c.put(e.request, copia));
-        }
-        return resp;
-      }).catch(() =>
-        enCache || (e.request.mode === 'navigate' ? caches.match('./index.html') : undefined)
-      );
-      return enCache || desdeRed;
-    })
-  );
+  // temporizadores de buffs
+  if(turboT>0){ turboT-=dt; if(turboT<=0) document.getElementById('bTurbo').style.display='none'; }
+  if(amorT >0){ amorT -=dt; if(amorT <=0) document.getElementById('bAmor' ).style.display='none'; }
+  if(calmaT>0){ calmaT-=dt; if(calmaT<=0) document.getElementById('bCalma').style.display='none'; }
+  if(invulnT>0) invulnT-=dt;
+  if(sacudida>0) sacudida-=dt;
+
+  // física de Tote
+  const estabaEnAire = !tote.enSuelo;
+  tote.vy += CFG.gravedad*dt;
+  tote.y  += tote.vy*dt;
+  if(tote.y >= GROUND){
+    tote.y = GROUND; tote.vy = 0; tote.enSuelo = true; tote.saltos = 0;
+    if(estabaEnAire){                                     // 💨 aterrizaje
+      puffPolvo(tote.x, GROUND);
+      if(tote.smash) sacudida = Math.max(sacudida, 0.12);
+      tote.smash = false;
+      if(comboAereo > 1) flota('COMBO x' + comboAereo, tote.x, tote.y - 95, '#7CFF6B');
+      comboAereo = 0;                                     // el combo se pierde al pisar suelo
+    }
+  }
+  tote.anim += dt * (8 + v/60);
+  // 👻 estela turbo (ghosting)
+  if(turboT > 0) estela.push({ x: tote.x, y: tote.y, t: 0.26 });
+  updateFX(dt);
+
+  // spawns
+  proxObst -= v*dt;
+  if(proxObst <= 0) spawnObstaculo();
+  tHueso -= dt; if(tHueso<=0) spawnHuesos();
+  if(jugando > 8){ tGato -= dt; if(tGato<=0 && !gato) spawnGato(); }
+  tSalchi -= dt; if(tSalchi<=0) spawnSalchicha();
+  tAmor  -= dt; if(tAmor <=0) spawnAmor();
+  if(jugando > 20){ tAbuelo -= dt; if(tAbuelo<=0) spawnGalleta(); }
+
+  // gato cruzando (más rápido que el mundo)
+  if(gato){
+    gato.x -= (v + 240)*dt; gato.anim += dt*14;
+    // 😼 ¡A por él! Si Tote lo pilla a ras de suelo: MODO IMPARABLE
+    if(!gato.pillado && gato.x > tote.x - 30 && gato.x < tote.x + 36 && tote.y > GROUND - 28){
+      gato.pillado = true;
+      const pts = 300 * pMult; puntos += pts;
+      invulnT = 6;                                    // 6s sin que nada pueda pararle
+      turboT  = CFG.turboDur;                         // turbo renovado
+      hitStop = 0.08; sacudida = Math.max(sacudida, 0.2);
+      sfx.power(); puffPolvo(gato.x, GROUND); confeti(gato.x, GROUND - 30);
+      flota('¡GATO PILLADO! +' + Math.floor(pts), tote.x, tote.y - 110, '#ffd23f');
+      flota('MODO IMPARABLE 6s', tote.x, tote.y - 90, '#7CFF6B');
+      gato = null;                                    // el gato sale por patas 🏃💨
+    }
+    else if(gato && gato.x < -80) gato = null;
+  }
+  if(frank){ frank.x -= v*dt; if(frank.x < -120) frank = null; }
+  if(ella){  ella.x  -= v*dt; if(ella.x  < -120) ella  = null; }
+  if(abuelo){ abuelo.x -= v*dt; if(abuelo.x < -120) abuelo = null; }
+
+  // pandilla y vecinos paseando por el fondo (sin colisión)
+  tPeaton -= dt;
+  if(tPeaton <= 0){
+    const tipos = ['frank','ella','abuelo','senyora','chico','runner','nino','abuela'];
+    peatones.push({ tipo: tipos[Math.floor(Math.random()*tipos.length)], x: W+70, paso: Math.random()*6 });
+    tPeaton = rnd(3, 6.5);                     // con más vecinos, el parque se ve más vivo
+  }
+  for(let i = peatones.length-1; i >= 0; i--){
+    const pt = peatones[i];
+    pt.x -= (v - 30)*dt;               // van andando, un pelín más lentos que el mundo
+    pt.paso += dt*7;
+    if(pt.x < -90) peatones.splice(i,1);
+  }
+
+  // entidades
+  const hb = { x: tote.x-30, y: tote.y-52, w: 64, h: 50 };   // hitbox de Tote
+  for(let i = entidades.length-1; i >= 0; i--){
+    const e = entidades[i];
+    e.x -= v*dt;
+    if(e.tipo==='paloma'){ e.x -= e.vx*dt; e.ala += dt*16; }
+    if(e.fase !== undefined) e.fase += dt*4;
+    if(e.x < -160){ entidades.splice(i,1); continue; }
+
+    // caja del objeto (los obstáculos apoyan en el suelo por y)
+    const ey = (e.tipo==='paloma'||e.tipo==='hueso'||e.tipo==='salchicha'||e.tipo==='corazon'||e.tipo==='galleta') ? e.y : e.y - e.h;
+    const caja = { x:e.x+4, y:ey+3, w:e.w-8, h:e.h-6 };
+
+    // 😮 Near-miss: saltar un obstáculo terrestre rozándolo (<5px) da puntos extra
+    if((e.tipo==='seto'||e.tipo==='maceta') && !e.roce && !tote.enSuelo &&
+       hb.x < caja.x+caja.w && hb.x+hb.w > caja.x){
+      const holgura = caja.y - (hb.y + hb.h);
+      if(holgura >= 0 && holgura < 5){
+        e.roce = true;
+        const pts = 15*pMult; puntos += pts;
+        flota('¡POR LOS PELOS! +' + Math.floor(pts), tote.x, tote.y - 105, '#f08ba0');
+        sfx.pelos();
+      }
+    }
+
+    const choca = hb.x < caja.x+caja.w && hb.x+hb.w > caja.x && hb.y < caja.y+caja.h && hb.y+hb.h > caja.y;
+    if(!choca) continue;
+
+    if(e.tipo==='hueso'){
+      huesosPartida++;
+      if(!tote.enSuelo) comboAereo++;                     // los huesos en el aire suman combo
+      const c = tote.enSuelo ? 1 : Math.max(1, comboAereo);
+      const pts = 25 * c * pMult; puntos += pts;
+      entidades.splice(i,1); sfx.hueso();
+      confeti(e.x+15, e.y+8);                             // 🎊 estallido
+      flota('+' + Math.floor(pts) + (c>1 ? ' x'+c : ''), e.x+15, e.y-8);
+    }
+    else if(e.tipo==='salchicha'){ escudo = true; document.getElementById('bEscudo').style.display='block'; entidades.splice(i,1); sfx.power();
+      hitStop = CFG.hitStopMs/1000; flota('🌭 ESCUDO', e.x+15, e.y-8, '#efe7da'); }
+    else if(e.tipo==='corazon'){ amorT = CFG.amorDur; document.getElementById('bAmor').style.display='block'; entidades.splice(i,1); sfx.power();
+      hitStop = CFG.hitStopMs/1000; flota('❤️ x2', e.x+15, e.y-8, '#e2586e'); }
+    else if(e.tipo==='galleta'){ calmaT = CFG.calmaDur; const pts = 40*pMult; puntos += pts; document.getElementById('bCalma').style.display='block'; entidades.splice(i,1); sfx.power();
+      hitStop = CFG.hitStopMs/1000; flota('+' + Math.floor(pts) + ' 🍪', e.x+15, e.y-8); }
+    else if(e.tipo==='paloma' && tote.vy > 0 && !tote.enSuelo){
+      // 🐦 ¡Aplastada estilo Mario! No muere: rebota
+      comboAereo++;
+      const c = Math.max(1, comboAereo);
+      const pts = 30 * c * pMult; puntos += pts;
+      tote.vy = CFG.rebotePaloma; tote.saltos = 1; tote.smash = false;
+      entidades.splice(i,1);
+      sfx.salto(); plumas(e.x+20, e.y+12);
+      flota('+' + Math.floor(pts) + (c>1 ? ' x'+c : ''), tote.x, tote.y - 85);
+      hitStop = CFG.hitStopMs/1000;                       // ⏸️ micro-pausa de impacto
+    }
+    else if(invulnT<=0){                                  // obstáculo
+      if(escudo){ escudo=false; invulnT=1.4; sacudida=0.25; document.getElementById('bEscudo').style.display='none'; entidades.splice(i,1); sfx.escudo(); }
+      else return gameOver();
+    }
+  }
+  actualizarHUD();
+}
+function actualizarHUD(){
+  document.getElementById('score').textContent  = Math.floor(puntos);
+  document.getElementById('huesos').textContent = '🦴 ' + huesosPartida;
+}
+let puedeReiniciar = true;
+function gameOver(){
+  tote.muerto = true; estado = 'gameover'; sfx.golpe(); sacudida = 0.4;
+  hitStop = 0.09;                                   // impacto gordo
+  puedeReiniciar = false;                           // ignora toques frenéticos hasta que salga el cartel
+  touchY0 = null; smashHecho = false;
+  document.getElementById('musicaFondo').pause();
+  banco += huesosPartida; localStorage.setItem('tote_banco', banco);
+  document.getElementById('menuBanco').textContent = banco;
+  const p = Math.floor(puntos);
+  const nuevo = p > record;
+  if(nuevo){ record = p; localStorage.setItem('tote_record', record); }
+  document.getElementById('record').textContent  = 'RÉCORD ' + record;
+  document.getElementById('goScore').textContent  = p;
+  document.getElementById('goRecord').textContent = record;
+  document.getElementById('goHuesos').textContent = huesosPartida;
+  document.getElementById('goBanco').textContent  = banco;
+  document.getElementById('nuevoRecord').style.display = nuevo ? 'block' : 'none';
+  if(fb.listo) fb.guardar(p);
+  setTimeout(()=>{
+    if(estado !== 'gameover') return;               // por si acaso, nunca tapar una partida en marcha
+    document.getElementById('gameover').classList.remove('oculto');
+    puedeReiniciar = true;                          // ahora sí: toca para reintentar
+  }, 450);
+}
+
+/* ================= JUICE / FX ✨ ================= */
+function puffPolvo(x, y){                                  // 💨 nubecilla al aterrizar
+  for(let i=0;i<8;i++) particulas.push({ x:x+rnd(-16,16), y:y-2, vx:rnd(-70,-10), vy:rnd(-75,-10),
+    r:rnd(3,6), t:rnd(0.28,0.5), g:0, tipo:'polvo' });
+}
+function confeti(x, y){                                    // 🎊 al coger un hueso
+  const cols = ['#ffd23f','#f08ba0','#7CFF6B','#5aa7c9','#e2586e'];
+  for(let i=0;i<14;i++) particulas.push({ x, y, vx:rnd(-160,160), vy:rnd(-260,-60),
+    r:rnd(2,4), t:rnd(0.4,0.7), g:900, col:cols[i%5], tipo:'chispa' });
+}
+function plumas(x, y){                                     // 🐦 al aplastar una paloma
+  for(let i=0;i<10;i++) particulas.push({ x, y, vx:rnd(-130,130), vy:rnd(-190,-30),
+    r:rnd(2,4), t:rnd(0.3,0.6), g:420, col:'#9aa0ad', tipo:'chispa' });
+}
+function flota(txt, x, y, col='#ffd23f'){                  // 🔤 marcador flotante
+  flotantes.push({ txt, x, y, t:0.9, col });
+}
+function updateFX(dt){
+  for(let i=particulas.length-1;i>=0;i--){ const p = particulas[i];
+    p.t -= dt; if(p.t<=0){ particulas.splice(i,1); continue; }
+    p.x += p.vx*dt; p.y += p.vy*dt; if(p.g) p.vy += p.g*dt; }
+  if(particulas.length > 90) particulas.splice(0, particulas.length-90);   // tope por FPS
+  for(let i=flotantes.length-1;i>=0;i--){ const f = flotantes[i];
+    f.t -= dt; f.y -= 55*dt; if(f.t<=0) flotantes.splice(i,1); }
+  for(let i=estela.length-1;i>=0;i--){ const s = estela[i];
+    s.t -= dt; if(s.t<=0) estela.splice(i,1); }
+  if(estela.length > 12) estela.splice(0, estela.length-12);
+}
+function dibujaEstela(){                                    // 👻 ghosting del turbo
+  for(const s of estela){
+    ctx.globalAlpha = Math.max(0, s.t) * 1.6;
+    ctx.fillStyle = 'rgba(59,50,48,0.45)';
+    ctx.beginPath(); ctx.ellipse(s.x-2,  s.y-30, 34, 20, 0, 0, 7); ctx.fill();
+    ctx.beginPath(); ctx.ellipse(s.x+32, s.y-46, 20, 17, 0, 0, 7); ctx.fill();
+  }
+  ctx.globalAlpha = 1;
+}
+function dibujaFX(){
+  for(const p of particulas){
+    ctx.globalAlpha = Math.min(1, p.t*2.2);
+    ctx.fillStyle = p.tipo==='polvo' ? 'rgba(222,214,190,0.9)' : p.col;
+    ctx.beginPath(); ctx.arc(p.x, p.y, p.r, 0, 7); ctx.fill();
+  }
+  ctx.globalAlpha = 1;
+  ctx.font = '10px "Press Start 2P"'; ctx.textAlign = 'center';
+  for(const f of flotantes){
+    ctx.globalAlpha = Math.min(1, f.t*1.7);
+    ctx.fillStyle = f.col;
+    ctx.strokeStyle = 'rgba(0,0,0,0.6)'; ctx.lineWidth = 3;
+    ctx.strokeText(f.txt, f.x, f.y);
+    ctx.fillText(f.txt, f.x, f.y);
+  }
+  ctx.globalAlpha = 1; ctx.textAlign = 'left';
+}
+
+/* ================= DIBUJO ================= */
+function fondo(){
+  // ☀️ cielo de día en el parque
+  const g = ctx.createLinearGradient(0,0,0,GROUND);
+  g.addColorStop(0,'#3aa0e8'); g.addColorStop(0.6,'#7fd0f2'); g.addColorStop(1,'#fff3c4');
+  ctx.fillStyle = g; ctx.fillRect(0,0,W,GROUND);
+  // sol con brillo
+  const sol = ctx.createRadialGradient(W*0.82, 70, 8, W*0.82, 70, 70);
+  sol.addColorStop(0,'rgba(255,236,150,0.95)'); sol.addColorStop(1,'rgba(255,236,150,0)');
+  ctx.fillStyle = sol; ctx.beginPath(); ctx.arc(W*0.82, 70, 70, 0, 7); ctx.fill();
+  ctx.fillStyle = '#ffde59'; ctx.beginPath(); ctx.arc(W*0.82, 70, 24, 0, 7); ctx.fill();
+  // ☁️ nubes esponjosas (parallax lento)
+  const offN = (distancia*0.12) % (W+320);
+  ctx.fillStyle = 'rgba(255,255,255,0.92)';
+  for(const [bx,by,s] of [[80,64,1],[420,100,0.8],[760,52,1.15]]){
+    const x = ((bx - offN) % (W+320) + W+320) % (W+320) - 160;
+    ctx.beginPath();
+    ctx.arc(x, by, 16*s, 0, 7); ctx.arc(x+20*s, by-9*s, 13*s, 0, 7); ctx.arc(x+40*s, by, 15*s, 0, 7);
+    ctx.arc(x+20*s, by+7*s, 17*s, 0, 7);
+    ctx.fill();
+  }
+  // árboles frondosos (parallax)
+  const off1 = (distancia*0.25) % 260;
+  for(let x = -off1; x < W+130; x += 260){
+    ctx.fillStyle = '#8a5a30'; ctx.fillRect(x+58, GROUND-105, 10, 105);
+    ctx.fillStyle = '#3f8d4a'; ctx.beginPath(); ctx.arc(x+63, GROUND-118, 42, 0, 7); ctx.fill();
+    ctx.fillStyle = '#57a862'; ctx.beginPath(); ctx.arc(x+48, GROUND-128, 22, 0, 7); ctx.fill();
+  }
+  // 🎈 globos atados (parallax medio, alegría)
+  const off2 = (distancia*0.55) % 420;
+  const globoCols = ['#e2586e','#ffd23f','#5aa7c9','#f08ba0'];
+  for(let x = -off2, gi = 0; x < W+80; x += 420, gi++){
+    const cx = x+123, cy = GROUND-150 + Math.sin((distancia*0.01)+gi)*6;
+    ctx.strokeStyle = 'rgba(80,60,40,0.6)'; ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.moveTo(cx, GROUND); ctx.lineTo(cx, cy+16); ctx.stroke();
+    ctx.fillStyle = globoCols[((gi%4)+4)%4];
+    ctx.beginPath(); ctx.ellipse(cx, cy, 13, 16, 0, 0, 7); ctx.fill();
+    ctx.fillStyle = 'rgba(255,255,255,0.5)';
+    ctx.beginPath(); ctx.ellipse(cx-4, cy-5, 4, 6, -0.4, 0, 7); ctx.fill();
+  }
+  // bancos del parque (decorativos, Tote pasa por delante sin chocar)
+  const offB = (distancia) % 680;
+  for(let x = -offB; x < W+120; x += 680){
+    ctx.fillStyle = '#a8703f';
+    ctx.fillRect(x+300, GROUND-42, 92, 9);          // respaldo
+    ctx.fillRect(x+300, GROUND-28, 92, 8);          // asiento
+    ctx.fillRect(x+307, GROUND-20, 7, 20);          // patas
+    ctx.fillRect(x+378, GROUND-20, 7, 20);
+    ctx.fillStyle = '#8a5a30';
+    ctx.fillRect(x+300, GROUND-42, 92, 3);
+  }
+  // suelo de césped luminoso
+  ctx.fillStyle = '#3f9d4a'; ctx.fillRect(0, GROUND, W, H-GROUND);
+  ctx.fillStyle = '#55b661'; ctx.fillRect(0, GROUND, W, 8);
+  // florecillas de colores
+  const off3 = (distancia) % 90;
+  const florCols = ['#fff','#ffd23f','#f08ba0'];
+  for(let x = -off3, fi = 0; x < W; x += 90, fi++){
+    ctx.fillStyle = florCols[((fi%3)+3)%3];
+    ctx.beginPath(); ctx.arc(x+30, GROUND+30, 3.2, 0, 7); ctx.fill();
+    ctx.fillStyle = '#fff';
+    ctx.beginPath(); ctx.arc(x+70, GROUND+58, 2.5, 0, 7); ctx.fill();
+  }
+  // diente de león (guiño a la foto)
+  ctx.fillStyle = '#ffd23f';
+  for(let x = -(distancia%310); x < W; x += 310){ ctx.beginPath(); ctx.arc(x+150, GROUND+44, 4, 0, 7); ctx.fill(); }
+}
+
+function dibujaTote(){
+  const t = tote, corre = t.enSuelo && !t.muerto;
+  const f = Math.sin(t.anim*2);                    // ciclo de patas
+  ctx.save();
+  ctx.translate(t.x, t.y);
+  if(!t.enSuelo) ctx.rotate(-0.12);
+  if(t.muerto) ctx.rotate(0.35);
+
+  // aura de escudo
+  if(escudo){ ctx.strokeStyle='rgba(255,210,63,.8)'; ctx.lineWidth=3; ctx.beginPath(); ctx.arc(0,-30,46,0,7); ctx.stroke(); }
+  // destellos turbo
+  if(turboT>0){ ctx.fillStyle='rgba(255,210,63,.5)';
+    for(let i=0;i<3;i++) ctx.fillRect(-52-i*14, -34+Math.sin(t.anim*3+i)*10, 10, 4); }
+  if(invulnT>0 && Math.floor(invulnT*12)%2) ctx.globalAlpha = 0.4;
+
+  // patas (atigrado oscuro, calcetines claros)
+  ctx.lineWidth = 9; ctx.lineCap = 'round'; ctx.strokeStyle = '#3b3230';
+  const p1 = corre ? f*9 : 4, p2 = corre ? -f*9 : -4;
+  ctx.beginPath(); ctx.moveTo(-22,-16); ctx.lineTo(-24+p2, 0); ctx.stroke();
+  ctx.beginPath(); ctx.moveTo(-12,-16); ctx.lineTo(-12+p1, 0); ctx.stroke();
+  ctx.beginPath(); ctx.moveTo( 12,-16); ctx.lineTo( 12+p2, 0); ctx.stroke();
+  ctx.beginPath(); ctx.moveTo( 22,-16); ctx.lineTo( 24+p1, 0); ctx.stroke();
+  ctx.fillStyle = '#e8ddce';
+  ctx.beginPath(); ctx.arc(-24+p2, 0, 5, 0, 7); ctx.fill();
+  ctx.beginPath(); ctx.arc(-12+p1, 0, 5, 0, 7); ctx.fill();
+  ctx.beginPath(); ctx.arc( 12+p2, 0, 5, 0, 7); ctx.fill();
+  ctx.beginPath(); ctx.arc( 24+p1, 0, 5, 0, 7); ctx.fill();
+
+  // cuerpo robusto de staffy
+  ctx.fillStyle = '#3b3230';
+  ctx.beginPath(); ctx.ellipse(-2, -30, 34, 20, 0, 0, 7); ctx.fill();
+  // rayas atigradas
+  ctx.strokeStyle = '#2a2422'; ctx.lineWidth = 3;
+  for(let i=-1;i<=1;i++){ ctx.beginPath(); ctx.moveTo(i*14-6,-44); ctx.quadraticCurveTo(i*14, -30, i*14-4, -16); ctx.stroke(); }
+  // pecho blanco
+  ctx.fillStyle = '#efe7da';
+  ctx.beginPath(); ctx.ellipse(20, -24, 13, 13, 0, 0, 7); ctx.fill();
+  // rabito
+  ctx.strokeStyle = '#3b3230'; ctx.lineWidth = 7;
+  ctx.beginPath(); ctx.moveTo(-34,-34); ctx.quadraticCurveTo(-46, -44+f*4, -50, -36+f*5); ctx.stroke();
+
+  // cabeza de staffy: cráneo ancho, mofletes potentes y morro corto
+  ctx.save(); ctx.translate(32, -46);
+  ctx.fillStyle = '#3b3230';
+  ctx.beginPath(); ctx.ellipse(-2, -4, 20, 15, 0, 0, 7); ctx.fill();       // cráneo ancho
+  ctx.beginPath(); ctx.ellipse(3, 6, 17, 12, 0, 0, 7); ctx.fill();         // mofletes / mandíbula de staffy
+  // franja blanca de la frente
+  ctx.fillStyle = '#efe7da';
+  ctx.beginPath(); ctx.moveTo(-1,-17); ctx.quadraticCurveTo(5,-6, 3, 4); ctx.quadraticCurveTo(-2,-6, -7,-16); ctx.closePath(); ctx.fill();
+  // morro corto y ancho, canoso de abuelete
+  ctx.fillStyle = '#cfc6b8';
+  ctx.beginPath(); ctx.ellipse(13, 5, 10, 9, 0, 0, 7); ctx.fill();
+  // sonrisa amplia marca staffy
+  ctx.strokeStyle = '#2a2220'; ctx.lineWidth = 2; ctx.lineCap = 'round';
+  ctx.beginPath(); ctx.moveTo(20, 6); ctx.quadraticCurveTo(13, 13, 4, 10); ctx.stroke();
+  ctx.fillStyle = '#20191a';
+  ctx.beginPath(); ctx.ellipse(19, 1, 5.5, 4, 0, 0, 7); ctx.fill();        // trufa grande
+  // lengua SIEMPRE fuera (marca de la casa)
+  ctx.fillStyle = '#f08ba0';
+  const lame = Math.sin(t.anim*3)*2;
+  ctx.beginPath(); ctx.ellipse(12, 15+lame, 5, 8, 0.2, 0, 7); ctx.fill();
+  // ojos marrones brillantes
+  ctx.fillStyle = '#5b3a1e'; ctx.beginPath(); ctx.arc(2, -6, 3.4, 0, 7); ctx.fill();
+  ctx.fillStyle = '#fff'; ctx.beginPath(); ctx.arc(3, -7, 1.2, 0, 7); ctx.fill();
+  if(t.muerto){ ctx.strokeStyle='#efe7da'; ctx.lineWidth=2;
+    ctx.beginPath(); ctx.moveTo(-1,-9); ctx.lineTo(6,-3); ctx.moveTo(6,-9); ctx.lineTo(-1,-3); ctx.stroke(); }
+  // orejas de rosa dobladas
+  ctx.fillStyle = '#332b29';
+  ctx.beginPath(); ctx.moveTo(-14,-13); ctx.quadraticCurveTo(-20,-26,-8,-22); ctx.quadraticCurveTo(-6,-16,-14,-13); ctx.fill();
+  ctx.beginPath(); ctx.moveTo(2,-15); ctx.quadraticCurveTo(2,-30,12,-23); ctx.quadraticCurveTo(12,-17,2,-15); ctx.fill();
+  ctx.fillStyle = '#b78a86';
+  ctx.beginPath(); ctx.ellipse(-12,-18,3,4,-0.5,0,7); ctx.fill();
+  ctx.restore();
+
+  // collar (color de la tienda 🛍️) con chapita
+  ctx.strokeStyle = COLLARES[collarSel].color; ctx.lineWidth = 6;
+  ctx.beginPath(); ctx.moveTo(22,-40); ctx.lineTo(30,-26); ctx.stroke();
+  ctx.fillStyle = '#c8c8c8'; ctx.beginPath(); ctx.arc(28,-22,4,0,7); ctx.fill();
+  ctx.restore();
+}
+
+function dibujaEntidades(){
+  for(const e of entidades){
+    if(e.tipo==='seto'){
+      ctx.fillStyle='#2c5a2e';
+      ctx.beginPath();
+      ctx.arc(e.x+16, e.y-18, 17, 0, 7);
+      ctx.arc(e.x+38, e.y-25, 20, 0, 7);
+      ctx.arc(e.x+52, e.y-14, 14, 0, 7);
+      ctx.fill();
+      ctx.fillStyle='#e2586e';
+      ctx.beginPath(); ctx.arc(e.x+20, e.y-28, 3, 0, 7); ctx.fill();
+      ctx.beginPath(); ctx.arc(e.x+46, e.y-34, 3, 0, 7); ctx.fill();
+    }else if(e.tipo==='charco'){
+      ctx.fillStyle='#5aa7c9';
+      ctx.beginPath(); ctx.ellipse(e.x+e.w/2, e.y, e.w/2, 8, 0, 0, 7); ctx.fill();
+      ctx.fillStyle='rgba(255,255,255,.5)';
+      ctx.beginPath(); ctx.ellipse(e.x+e.w/2-14, e.y-2, 12, 3, 0, 0, 7); ctx.fill();
+    }else if(e.tipo==='maceta'){
+      ctx.fillStyle='#b5622f'; ctx.fillRect(e.x, e.y-30, e.w, 30);
+      ctx.fillStyle='#c9744a'; ctx.fillRect(e.x-3, e.y-36, e.w+6, 8);
+      ctx.fillStyle='#e2586e';
+      ctx.beginPath(); ctx.arc(e.x+e.w/2, e.y-46, 9, 0, 7); ctx.fill();
+      ctx.fillStyle='#ffd23f'; ctx.beginPath(); ctx.arc(e.x+e.w/2, e.y-46, 3.5, 0, 7); ctx.fill();
+    }else if(e.tipo==='paloma'){
+      const ala = Math.sin(e.ala)*10;
+      ctx.fillStyle='#9aa0ad';
+      ctx.beginPath(); ctx.ellipse(e.x+22, e.y+13, 16, 10, 0, 0, 7); ctx.fill();
+      ctx.beginPath(); ctx.arc(e.x+8, e.y+8, 7, 0, 7); ctx.fill();
+      ctx.fillStyle='#7d8390';
+      ctx.beginPath(); ctx.moveTo(e.x+22, e.y+10); ctx.quadraticCurveTo(e.x+30, e.y-2-ala, e.x+40, e.y+6-ala); ctx.lineTo(e.x+26, e.y+14); ctx.fill();
+      ctx.fillStyle='#f0a034'; ctx.beginPath(); ctx.moveTo(e.x+2,e.y+7); ctx.lineTo(e.x-4,e.y+9); ctx.lineTo(e.x+2,e.y+11); ctx.fill();
+    }else if(e.tipo==='hueso'){
+      const fl = Math.sin(e.fase)*4;
+      // silueta oscura detrás para que resalte con el cielo de día
+      ctx.fillStyle='#6b4a22';
+      ctx.fillRect(e.x+4, e.y+3+fl, e.w-8, 10);
+      for(const dx of [4, e.w-4]) for(const dy of [3, 13]){
+        ctx.beginPath(); ctx.arc(e.x+dx, e.y+dy+fl, 6.8, 0, 7); ctx.fill();
+      }
+      ctx.fillStyle='#fffdf2';
+      ctx.fillRect(e.x+6, e.y+5+fl, e.w-12, 6);
+      for(const dx of [4, e.w-4]) for(const dy of [3, 13]){
+        ctx.beginPath(); ctx.arc(e.x+dx, e.y+dy+fl, 5, 0, 7); ctx.fill();
+      }
+    }else if(e.tipo==='salchicha'){
+      const flota = Math.sin(e.fase)*5;
+      ctx.fillStyle='#c0553a'; ctx.strokeStyle='#8e3b26'; ctx.lineWidth=2;
+      ctx.beginPath(); ctx.ellipse(e.x+e.w/2, e.y+8+flota, 17, 8, -0.2, 0, 7); ctx.fill(); ctx.stroke();
+    }else if(e.tipo==='galleta'){
+      const flota = Math.sin(e.fase)*5, cx=e.x+13, cy=e.y+13+flota;
+      ctx.fillStyle='#d9a25c';
+      ctx.beginPath(); ctx.arc(cx, cy, 12, 0, 7); ctx.fill();
+      ctx.strokeStyle='#b9823f'; ctx.lineWidth=2; ctx.beginPath(); ctx.arc(cx, cy, 12, 0, 7); ctx.stroke();
+      ctx.fillStyle='#6b4226';                                     // pepitas de chocolate
+      for(const [dx,dy] of [[-5,-3],[4,-5],[0,3],[6,4],[-6,5]]){
+        ctx.beginPath(); ctx.arc(cx+dx, cy+dy, 1.8, 0, 7); ctx.fill();
+      }
+    }else if(e.tipo==='corazon'){
+      const flota = Math.sin(e.fase)*5, cx=e.x+13, cy=e.y+10+flota;
+      ctx.fillStyle='#e2586e';
+      ctx.beginPath();
+      ctx.moveTo(cx, cy+11);
+      ctx.bezierCurveTo(cx-16, cy-2, cx-8, cy-13, cx, cy-4);
+      ctx.bezierCurveTo(cx+8, cy-13, cx+16, cy-2, cx, cy+11);
+      ctx.fill();
+    }
+  }
+}
+
+function dibujaGato(){
+  if(!gato) return;
+  const f = Math.sin(gato.anim)*8;
+  ctx.save(); ctx.translate(gato.x, GROUND);
+  ctx.fillStyle = '#4a4a52';
+  ctx.lineWidth=5; ctx.lineCap='round'; ctx.strokeStyle='#4a4a52';
+  ctx.beginPath(); ctx.moveTo(-14,-12); ctx.lineTo(-16+f,0); ctx.stroke();
+  ctx.beginPath(); ctx.moveTo(12,-12); ctx.lineTo(14-f,0); ctx.stroke();
+  ctx.beginPath(); ctx.ellipse(0,-18,20,10,0,0,7); ctx.fill();
+  ctx.beginPath(); ctx.arc(-22,-24,8,0,7); ctx.fill();
+  ctx.beginPath(); ctx.moveTo(-27,-30); ctx.lineTo(-29,-38); ctx.lineTo(-22,-32); ctx.fill();
+  ctx.beginPath(); ctx.moveTo(-19,-31); ctx.lineTo(-16,-38); ctx.lineTo(-13,-31); ctx.fill();
+  ctx.strokeStyle='#4a4a52'; ctx.lineWidth=4;
+  ctx.beginPath(); ctx.moveTo(18,-22); ctx.quadraticCurveTo(30,-34, 26,-42); ctx.stroke();
+  ctx.restore();
+}
+/* Rasgos faciales compartidos: ojos con brillo, cejas, nariz y sonrisa */
+function caraRasgos(cx, cy, r, o={}){
+  // ojos (esclerótica + pupila)
+  ctx.fillStyle = '#fff';
+  ctx.beginPath(); ctx.ellipse(cx-r*0.38, cy-r*0.15, r*0.22, r*0.26, 0, 0, 7); ctx.fill();
+  ctx.beginPath(); ctx.ellipse(cx+r*0.38, cy-r*0.15, r*0.22, r*0.26, 0, 0, 7); ctx.fill();
+  ctx.fillStyle = o.ojos || '#3a2a1a';
+  ctx.beginPath(); ctx.arc(cx-r*0.33, cy-r*0.12, r*0.12, 0, 7); ctx.fill();
+  ctx.beginPath(); ctx.arc(cx+r*0.43, cy-r*0.12, r*0.12, 0, 7); ctx.fill();
+  ctx.fillStyle = '#fff';
+  ctx.beginPath(); ctx.arc(cx-r*0.29, cy-r*0.17, r*0.045, 0, 7); ctx.fill();
+  ctx.beginPath(); ctx.arc(cx+r*0.47, cy-r*0.17, r*0.045, 0, 7); ctx.fill();
+  // cejas
+  ctx.strokeStyle = o.cejas || '#4a3520'; ctx.lineWidth = 1.4; ctx.lineCap = 'round';
+  ctx.beginPath(); ctx.moveTo(cx-r*0.55, cy-r*0.44); ctx.lineTo(cx-r*0.16, cy-r*0.52); ctx.stroke();
+  ctx.beginPath(); ctx.moveTo(cx+r*0.18, cy-r*0.52); ctx.lineTo(cx+r*0.58, cy-r*0.44); ctx.stroke();
+  // nariz
+  ctx.strokeStyle = 'rgba(90,55,35,0.4)'; ctx.lineWidth = 1.2;
+  ctx.beginPath(); ctx.moveTo(cx+r*0.04, cy-r*0.02); ctx.quadraticCurveTo(cx+r*0.14, cy+r*0.16, cx+r*0.02, cy+r*0.24); ctx.stroke();
+  // boca sonriente
+  ctx.strokeStyle = '#8a4b3a'; ctx.lineWidth = 1.5;
+  ctx.beginPath(); ctx.moveTo(cx-r*0.28, cy+r*0.44); ctx.quadraticCurveTo(cx, cy+r*0.64, cx+r*0.3, cy+r*0.44); ctx.stroke();
+  // extras
+  if(o.colorete){ ctx.fillStyle = 'rgba(240,139,160,0.45)';
+    ctx.beginPath(); ctx.ellipse(cx-r*0.58, cy+r*0.24, r*0.17, r*0.11, 0, 0, 7); ctx.fill();
+    ctx.beginPath(); ctx.ellipse(cx+r*0.58, cy+r*0.24, r*0.17, r*0.11, 0, 0, 7); ctx.fill(); }
+  if(o.pecas){ ctx.fillStyle = 'rgba(140,90,50,0.7)';
+    for(const [dx,dy] of [[-0.3,0.24],[-0.14,0.3],[0.2,0.26],[0.34,0.32]]){
+      ctx.beginPath(); ctx.arc(cx+dx*r, cy+dy*r, 0.8, 0, 7); ctx.fill(); } }
+  if(o.arrugas){ ctx.strokeStyle = 'rgba(0,0,0,0.22)'; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(cx-r*0.45, cy-r*0.72); ctx.quadraticCurveTo(cx, cy-r*0.84, cx+r*0.45, cy-r*0.72); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(cx-r*0.62, cy+r*0.05); ctx.lineTo(cx-r*0.5, cy+r*0.12); ctx.stroke(); }
+}
+
+function dibujaPersona(p, tipo){
+  if(!p) return;
+  ctx.save(); ctx.translate(p.x, GROUND);
+  if(tipo==='frank'){   // Frank: 1,90, moreno, delgado, con bigote
+    ctx.fillStyle='#3f5a78'; ctx.fillRect(-8,-80,16,46);            // camisa (delgado)
+    ctx.fillStyle='#2c3440'; ctx.fillRect(-7,-36,6,36); ctx.fillRect(2,-36,6,36); // vaqueros
+    ctx.fillStyle='#e8b98f'; ctx.beginPath(); ctx.arc(0,-92,11,0,7); ctx.fill(); // cara
+    caraRasgos(0,-92,11,{cejas:'#241a12'});
+    ctx.fillStyle='#241a12';                                        // pelo moreno con volumen
+    ctx.beginPath(); ctx.arc(0,-96,11.5,Math.PI*0.95,Math.PI*2.05); ctx.fill();
+    ctx.fillRect(-11.5,-100,23,6);
+    ctx.beginPath(); ctx.arc(-9,-95,3.5,0,7); ctx.fill();           // patilla
+    ctx.fillStyle='#241a12'; ctx.fillRect(-5.5,-87.5,11,3);         // bigote sobre la sonrisa
+    ctx.strokeStyle='#3f5a78'; ctx.lineWidth=5; ctx.lineCap='round';
+    ctx.beginPath(); ctx.moveTo(8,-72); ctx.lineTo(22,-90); ctx.stroke();  // brazo lanzando
+  }else if(tipo==='ella'){  // Ella: delgadita, piel clara, pelo castaño claro
+    ctx.fillStyle='#eba9c0'; ctx.fillRect(-7,-70,14,40);            // vestido rosa (delgadita)
+    ctx.fillStyle='#f3d9c4'; ctx.fillRect(-5,-30,4,30); ctx.fillRect(1,-30,4,30); // piernas piel clara
+    ctx.fillStyle='#f3d9c4'; ctx.beginPath(); ctx.arc(0,-82,10,0,7); ctx.fill(); // cara piel clara
+    caraRasgos(0,-82,10,{cejas:'#8d6f45',colorete:true});
+    ctx.fillStyle='#b08d5b';                                        // melena castaño claro
+    ctx.beginPath(); ctx.arc(0,-86,11,Math.PI*0.9,Math.PI*2.1); ctx.fill();
+    ctx.fillRect(-11,-86,4.5,28); ctx.fillRect(6.5,-86,4.5,28);
+    ctx.beginPath(); ctx.arc(-8,-90,4,0,7); ctx.fill();             // mechón
+    ctx.strokeStyle='#eba9c0'; ctx.lineWidth=5; ctx.lineCap='round';
+    ctx.beginPath(); ctx.moveTo(7,-62); ctx.lineTo(19,-80); ctx.stroke();   // saludando
+  }else if(tipo==='senyora'){  // vecina del parque
+    ctx.fillStyle='#8e6fae'; ctx.fillRect(-9,-64,18,38);            // vestido lila
+    ctx.fillStyle='#e8b98f'; ctx.fillRect(-6,-26,5,26); ctx.fillRect(1,-26,5,26);
+    ctx.fillStyle='#e8b98f'; ctx.beginPath(); ctx.arc(0,-76,10,0,7); ctx.fill();
+    caraRasgos(0,-76,10,{cejas:'#8a8378',colorete:true,arrugas:true});
+    ctx.fillStyle='#bfb8ae';                                        // pelo gris con moño
+    ctx.beginPath(); ctx.arc(0,-80,10.5,Math.PI*0.9,Math.PI*2.1); ctx.fill();
+    ctx.beginPath(); ctx.arc(0,-90,5,0,7); ctx.fill();
+    ctx.fillStyle='#e2586e'; ctx.beginPath(); ctx.arc(4,-89,1.8,0,7); ctx.fill();  // florecilla en el moño
+    ctx.fillStyle='#5c3a22';                                        // bolso
+    ctx.fillRect(9,-52,10,9);
+  }else if(tipo==='chico'){    // chaval con gorra y pecas
+    ctx.fillStyle='#3e8e5a'; ctx.fillRect(-8,-64,16,36);            // camiseta verde
+    ctx.fillStyle='#2c3440'; ctx.fillRect(-7,-28,6,28); ctx.fillRect(2,-28,6,28);
+    ctx.fillStyle='#d9a878'; ctx.beginPath(); ctx.arc(0,-76,10,0,7); ctx.fill();
+    caraRasgos(0,-76,10,{cejas:'#5c3a1c',pecas:true});
+    ctx.fillStyle='#c23b3b';                                        // gorra roja
+    ctx.beginPath(); ctx.arc(0,-80,10.5,Math.PI,0); ctx.fill();
+    ctx.fillRect(0,-82,16,4);                                       // visera
+  }else if(tipo==='runner'){   // 🏃‍♀️ corredora con coleta
+    ctx.fillStyle='#37b8b0'; ctx.fillRect(-7,-66,14,26);            // top deportivo
+    ctx.fillStyle='#2c3440'; ctx.fillRect(-6,-40,5,40); ctx.fillRect(1,-40,5,40); // mallas
+    ctx.fillStyle='#ff7a59'; ctx.fillRect(-7,-4,7,4); ctx.fillRect(1,-4,7,4);     // zapas naranjas
+    ctx.fillStyle='#e8b98f'; ctx.beginPath(); ctx.arc(0,-78,10,0,7); ctx.fill();
+    caraRasgos(0,-78,10,{cejas:'#241a12',colorete:true});
+    ctx.fillStyle='#241a12';                                        // pelo con coleta al aire
+    ctx.beginPath(); ctx.arc(0,-82,10.5,Math.PI*0.9,Math.PI*2.1); ctx.fill();
+    ctx.beginPath(); ctx.moveTo(-9,-86); ctx.quadraticCurveTo(-20,-84,-22,-72);
+    ctx.quadraticCurveTo(-16,-76,-11,-79); ctx.fill();              // coleta
+    ctx.fillStyle='#ffd23f'; ctx.fillRect(-10.5,-86,21,3);          // cinta del pelo
+    ctx.strokeStyle='#37b8b0'; ctx.lineWidth=5; ctx.lineCap='round';
+    ctx.beginPath(); ctx.moveTo(6,-58); ctx.lineTo(14,-48); ctx.stroke();  // brazo en carrera
+  }else if(tipo==='nino'){     // 👦 niño pequeño con globo rojo
+    ctx.fillStyle='#f2c14e'; ctx.fillRect(-6,-42,12,22);            // camiseta amarilla
+    ctx.fillStyle='#4a6fa5'; ctx.fillRect(-5,-20,4,20); ctx.fillRect(1,-20,4,20); // pantalón corto
+    ctx.fillStyle='#d9a878'; ctx.beginPath(); ctx.arc(0,-52,8.5,0,7); ctx.fill();
+    caraRasgos(0,-52,8.5,{cejas:'#5c3a1c',pecas:true,colorete:true});
+    ctx.fillStyle='#5c3a1c';                                        // pelo revuelto
+    ctx.beginPath(); ctx.arc(0,-56,9,Math.PI*0.95,Math.PI*2.05); ctx.fill();
+    ctx.beginPath(); ctx.arc(-4,-62,2.5,0,7); ctx.arc(2,-63,2.5,0,7); ctx.fill();
+    // globo rojo 🎈
+    ctx.strokeStyle='rgba(80,60,40,0.7)'; ctx.lineWidth=1.5;
+    ctx.beginPath(); ctx.moveTo(8,-44); ctx.quadraticCurveTo(13,-58,12,-74); ctx.stroke();
+    ctx.fillStyle='#e2483c'; ctx.beginPath(); ctx.ellipse(12,-82,8,10,0,0,7); ctx.fill();
+    ctx.fillStyle='rgba(255,255,255,0.5)'; ctx.beginPath(); ctx.ellipse(9.5,-85,2.5,3.5,-0.4,0,7); ctx.fill();
+  }else if(tipo==='abuela'){   // 👵 abuela con rebeca y bolso
+    ctx.fillStyle='#d98ca6'; ctx.fillRect(-10,-62,20,36);           // rebeca rosa
+    ctx.fillStyle='#7a6a80'; ctx.fillRect(-8,-26,7,26); ctx.fillRect(1,-26,7,26); // falda/medias
+    ctx.fillStyle='#e8b98f'; ctx.beginPath(); ctx.arc(0,-74,10.5,0,7); ctx.fill();
+    caraRasgos(0,-74,10.5,{cejas:'#a8a099',colorete:true,arrugas:true});
+    ctx.fillStyle='#e8e2d8';                                        // pelo blanco con moño
+    ctx.beginPath(); ctx.arc(0,-78,11,Math.PI*0.9,Math.PI*2.1); ctx.fill();
+    ctx.beginPath(); ctx.arc(0,-88,4.5,0,7); ctx.fill();
+    // gafas redondas doradas
+    ctx.strokeStyle='#b9973f'; ctx.lineWidth=1.8;
+    ctx.beginPath(); ctx.arc(-4,-76,3.4,0,7); ctx.stroke();
+    ctx.beginPath(); ctx.arc(4.5,-76,3.4,0,7); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(-0.8,-76); ctx.lineTo(1.2,-76); ctx.stroke();
+    ctx.fillStyle='#8e4a5c'; ctx.fillRect(10,-48,10,10);            // bolso granate
+    ctx.strokeStyle='#8e4a5c'; ctx.lineWidth=2;
+    ctx.beginPath(); ctx.arc(15,-48,4,Math.PI,0); ctx.stroke();     // asa
+  }else{                // El Maestro: 60 años, camisa de cuadros azul, bigote y entradas
+    // camisa de cuadros azul
+    ctx.fillStyle='#2e4d8f'; ctx.fillRect(-11,-70,22,42);
+    ctx.strokeStyle='rgba(170,205,255,0.5)'; ctx.lineWidth=1.3;
+    for(const dx of [-6,0,6]){ ctx.beginPath(); ctx.moveTo(dx,-70); ctx.lineTo(dx,-28); ctx.stroke(); }
+    ctx.strokeStyle='rgba(130,205,130,0.45)';
+    for(const dy of [-62,-50,-38]){ ctx.beginPath(); ctx.moveTo(-11,dy); ctx.lineTo(11,dy); ctx.stroke(); }
+    ctx.fillStyle='#24407a';                                        // cuello de la camisa
+    ctx.beginPath(); ctx.moveTo(-6,-70); ctx.lineTo(0,-63); ctx.lineTo(6,-70); ctx.closePath(); ctx.fill();
+    ctx.fillStyle='#4a4a52'; ctx.fillRect(-8,-28,7,28); ctx.fillRect(1,-28,7,28); // pantalón
+    // cabeza
+    ctx.fillStyle='#e8b98f'; ctx.beginPath(); ctx.arc(0,-82,11,0,7); ctx.fill();
+    caraRasgos(0,-82,11,{cejas:'#3d2f22'});
+    // cejas pobladas marca de la casa
+    ctx.strokeStyle='#3d2f22'; ctx.lineWidth=2.6; ctx.lineCap='round';
+    ctx.beginPath(); ctx.moveTo(-6.5,-87); ctx.lineTo(-1.5,-88.2); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(2,-88.2); ctx.lineTo(7,-87); ctx.stroke();
+    // entradas: coronilla despejada con pelusilla fina arriba
+    ctx.fillStyle='rgba(176,141,91,0.5)';
+    ctx.beginPath(); ctx.arc(0,-88,9.5,Math.PI*1.2,Math.PI*1.8); ctx.fill();
+    // bigote poblado castaño-canoso sobre la sonrisa
+    ctx.fillStyle='#6e5a44';
+    ctx.beginPath(); ctx.ellipse(-3.2,-77,4.2,2.1,0.18,0,7); ctx.fill();
+    ctx.beginPath(); ctx.ellipse(3.2,-77,4.2,2.1,-0.18,0,7); ctx.fill();
+    // brazo ofreciendo la galleta
+    ctx.strokeStyle='#2e4d8f'; ctx.lineWidth=5; ctx.lineCap='round';
+    ctx.beginPath(); ctx.moveTo(9,-60); ctx.lineTo(20,-76); ctx.stroke();
+  }
+  ctx.restore();
+}
+
+function dibujaPeatones(){
+  for(const pt of peatones){
+    ctx.save();
+    ctx.globalAlpha = 0.8;                        // ligeramente atenuados: son fondo
+    ctx.translate(0, Math.sin(pt.paso)*1.5);      // balanceo al andar
+    dibujaPersona(pt, pt.tipo);
+    ctx.restore();
+  }
+}
+
+function render(){
+  ctx.save();
+  if(sacudida>0) ctx.translate(rnd(-5,5), rnd(-5,5));
+  fondo();
+  dibujaPeatones();
+  dibujaPersona(frank, 'frank');
+  dibujaPersona(ella, 'ella');
+  dibujaPersona(abuelo, 'abuelo');
+  dibujaEntidades();
+  dibujaGato();
+  dibujaEstela();
+  dibujaTote();
+  dibujaFX();
+  ctx.restore();
+}
+
+/* ================= BUCLE ================= */
+let ultimoT = performance.now();
+function loop(t){
+  const dt = Math.min((t - ultimoT)/1000, 0.05);
+  ultimoT = t;
+  if(hitStop > 0){ hitStop -= dt; render(); requestAnimationFrame(loop); return; }  // ⏸️ micro-pausa de impacto
+  if(estado === 'playing') update(dt);
+  if(estado !== 'menu' || true) render();
+  requestAnimationFrame(loop);
+}
+reset(); render();
+requestAnimationFrame(loop);
+
+/* ================= TIENDA 🛍️ ================= */
+function pintaTienda(){
+  document.getElementById('tiendaBanco').textContent = banco;
+  document.getElementById('menuBanco').textContent = banco;
+  const cont = document.getElementById('tiendaItems'); cont.innerHTML = '';
+  for(const id in COLLARES){
+    const c = COLLARES[id], mio = collaresMios.includes(id), puesto = collarSel === id;
+    const fila = document.createElement('div'); fila.className = 'item';
+    const b = document.createElement('button');
+    if(puesto){ b.textContent = '✔ Puesto'; b.className = 'puesto'; b.disabled = true; }
+    else if(mio){ b.textContent = 'Poner'; }
+    else { b.textContent = '🦴 ' + c.precio; b.disabled = banco < c.precio; }
+    b.addEventListener('pointerdown', ev=>{
+      ev.stopPropagation();
+      if(!mio){
+        if(banco < c.precio) return;
+        banco -= c.precio; collaresMios.push(id);
+        localStorage.setItem('tote_banco', banco);
+        localStorage.setItem('tote_collares', JSON.stringify(collaresMios));
+        sfx.hueso();
+      }
+      collarSel = id; localStorage.setItem('tote_collar', id);
+      pintaTienda();
+    });
+    fila.innerHTML = `<span class="bola" style="background:${c.color}"></span><span class="nom">${c.nombre}</span>`;
+    fila.appendChild(b);
+    cont.appendChild(fila);
+  }
+}
+document.getElementById('btnTienda').addEventListener('pointerdown', e=>{
+  e.stopPropagation(); tiendaAbierta = true; pintaTienda();
+  document.getElementById('tienda').classList.remove('oculto');
 });
+document.getElementById('btnCerrarTienda').addEventListener('pointerdown', e=>{
+  e.stopPropagation();
+  document.getElementById('tienda').classList.add('oculto');
+  setTimeout(()=>{ tiendaAbierta = false; }, 80);   // evita que el mismo toque arranque la partida
+});
+pintaTienda();
+
+/* ================= MÚSICA 🎵 ================= */
+const musica = document.getElementById('musicaFondo');
+musica.volume = 0.35;
+function iniciarMusica(){
+  if(!mute) musica.play().catch(()=>{});   // si no hay musica.mp3, no pasa nada
+}
+
+/* ================= PAUSA / AJUSTES ⚙️ ================= */
+document.getElementById('btnAjustes').addEventListener('pointerdown', e=>{
+  e.stopPropagation();
+  if(estado !== 'playing') return;
+  estado = 'pausa';
+  document.getElementById('pausaScr').classList.remove('oculto');
+  musica.pause();
+});
+document.getElementById('btnSeguir').addEventListener('pointerdown', e=>{
+  e.stopPropagation();
+  estado = 'playing'; document.getElementById('pausaScr').classList.add('oculto');
+  ultimoT = performance.now(); if(!mute) musica.play().catch(()=>{});
+});
+document.getElementById('btnReiniciar').addEventListener('pointerdown', e=>{
+  e.stopPropagation();
+  document.getElementById('pausaScr').classList.add('oculto');
+  reset(); estado = 'playing'; ultimoT = performance.now(); iniciarMusica();
+});
+document.getElementById('btnSalirMenu').addEventListener('pointerdown', e=>{
+  e.stopPropagation();
+  document.getElementById('pausaScr').classList.add('oculto');
+  reset(); estado = 'menu'; musica.pause();
+  pintaTienda();                                       // refresca la hucha del menú
+  document.getElementById('menu').classList.remove('oculto');
+});
+document.getElementById('btnSesion').addEventListener('pointerdown', e=>{
+  e.stopPropagation();
+  if(!fb.listo) return;
+  if(fb.user) firebase.auth().signOut();
+  else fb.entrar();
+});
+
+/* ================= FIREBASE (récords online) ================= */
+const fb = { listo:false, user:null,
+  async init(){
+    if(!ENABLE_FIREBASE || firebaseConfig.apiKey==='PEGA_AQUI') return;
+    const carga = src => new Promise(r=>{ const s=document.createElement('script'); s.src=src; s.onload=r; document.head.appendChild(s); });
+    await carga('https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js');
+    await carga('https://www.gstatic.com/firebasejs/10.12.0/firebase-auth-compat.js');
+    await carga('https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore-compat.js');
+    firebase.initializeApp(firebaseConfig);
+    this.listo = true;
+    this.provider = new firebase.auth.GoogleAuthProvider();
+    this.provider.setCustomParameters({ prompt: 'select_account' });   // deja ELEGIR la cuenta
+    document.getElementById('authBar').classList.remove('oculto');
+    firebase.auth().onAuthStateChanged(u=>{
+      this.user = u;
+      const nombre = u ? (u.displayName||'').split(' ')[0] : '';
+      document.getElementById('quien').textContent = u ? ('👋 Jugando como ' + nombre) : '';
+      document.getElementById('btnLogin').style.display   = u ? 'none' : '';
+      document.getElementById('btnCambiar').style.display = u ? '' : 'none';
+      const bs = document.getElementById('btnSesion');
+      bs.style.display = '';
+      bs.textContent = u ? ('🚪 Cerrar sesión (' + nombre + ')') : '🔑 Iniciar sesión con Google';
+      if(u) this.top();                       // al entrar, carga el Top 10 directamente
+    });
+    document.getElementById('btnLogin').addEventListener('pointerdown', e=>{
+      e.stopPropagation();
+      this.entrar();
+    });
+    document.getElementById('btnCambiar').addEventListener('pointerdown', e=>{
+      e.stopPropagation();
+      firebase.auth().signOut().then(()=> this.entrar()).catch(()=>{});   // cambia de cuenta al vuelo
+    });
+  },
+  entrar(){
+    firebase.auth().signInWithPopup(this.provider);
+  },
+  async guardar(p){
+    try{
+      if(!this.user) return this.top();
+      const ref = firebase.firestore().collection('toteRunner').doc(this.user.uid);
+      const doc = await ref.get();
+      if(!doc.exists || (doc.data().puntos||0) < p)
+        await ref.set({ nombre:(this.user.displayName||'Anónimo').split(' ')[0], puntos:p, fecha:new Date() });
+      this.top();
+    }catch(e){ console.warn('toteRunner: no se pudo guardar el récord', e); }
+  },
+  async top(){
+    if(!this.listo) return;
+    try{
+      const snap = await firebase.firestore().collection('toteRunner').orderBy('puntos','desc').limit(10).get();
+      const lb = document.getElementById('lb'); lb.innerHTML='<b>🏆 Top 10</b>'; lb.style.display='block';
+      let i=1; snap.forEach(d=>{ const x=d.data();
+        const yo = this.user && d.id === this.user.uid;
+        lb.innerHTML += `<li${yo?' style="color:#7CFF6B"':''}>${i++}. ${x.nombre} — ${x.puntos}${yo?' ← tú':''}</li>`; });
+    }catch(e){ console.warn('toteRunner: no se pudo leer el top', e); }
+  }
+};
+fb.init();
+
+/* ================= PWA INSTALABLE 📱 =================
+   Genera el icono (la cara de Tote) y el manifest al vuelo,
+   todo dentro de este mismo archivo. Al servirlo por HTTPS
+   (GitHub Pages), Chrome ofrece "Instalar aplicación". */
+(function(){
+  const c = document.createElement('canvas'); c.width = c.height = 512;
+  const x = c.getContext('2d');
+  // fondo atardecer redondeado
+  const g = x.createLinearGradient(0,0,0,512);
+  g.addColorStop(0,'#3aa0e8'); g.addColorStop(1,'#ffe08a');
+  x.fillStyle = g;
+  x.beginPath(); x.roundRect(0,0,512,512,110); x.fill();
+  // cara de Tote de frente
+  x.translate(256,272); x.scale(10.5,10.5);
+  x.fillStyle='#3b3230'; x.beginPath(); x.ellipse(0,-2,20,18,0,0,7); x.fill();
+  // orejitas dobladas
+  x.fillStyle='#332b29';
+  x.beginPath(); x.moveTo(-14,-14); x.quadraticCurveTo(-23,-28,-8,-23); x.quadraticCurveTo(-6,-17,-14,-14); x.fill();
+  x.beginPath(); x.moveTo(14,-14); x.quadraticCurveTo(23,-28,8,-23); x.quadraticCurveTo(6,-17,14,-14); x.fill();
+  x.fillStyle='#b78a86';
+  x.beginPath(); x.ellipse(-13,-19,3,4,-0.5,0,7); x.fill();
+  x.beginPath(); x.ellipse(13,-19,3,4,0.5,0,7); x.fill();
+  // franja blanca de la frente
+  x.fillStyle='#efe7da';
+  x.beginPath(); x.moveTo(-3,-19); x.quadraticCurveTo(0,-8,-1,0); x.quadraticCurveTo(2,-8,3,-19);
+  x.quadraticCurveTo(0,-21,-3,-19); x.closePath(); x.fill();
+  // morro canoso
+  x.fillStyle='#cfc6b8'; x.beginPath(); x.ellipse(0,7,11,8,0,0,7); x.fill();
+  x.fillStyle='#20191a'; x.beginPath(); x.ellipse(0,3,5,3.6,0,0,7); x.fill();
+  // lengua fuera (marca de la casa)
+  x.fillStyle='#f08ba0'; x.beginPath(); x.ellipse(0,15,4.5,7,0,0,7); x.fill();
+  // ojos marrones
+  x.fillStyle='#5b3a1e';
+  x.beginPath(); x.arc(-8,-6,3.3,0,7); x.fill();
+  x.beginPath(); x.arc(8,-6,3.3,0,7); x.fill();
+  x.fillStyle='#fff';
+  x.beginPath(); x.arc(-7,-7,1.2,0,7); x.fill();
+  x.beginPath(); x.arc(9,-7,1.2,0,7); x.fill();
+  const icono = c.toDataURL('image/png');
+
+  const man = {
+    name: 'Tote Runner', short_name: 'Tote',
+    description: 'Tote, el staffy más bueno del parque, corre y salta',
+    display: 'standalone', orientation: 'landscape',
+    background_color: '#3aa0e8', theme_color: '#3aa0e8',
+    start_url: location.href, scope: new URL('.', location.href).href,
+    icons: [
+      { src: icono, sizes: '512x512', type: 'image/png', purpose: 'any' },
+      { src: icono, sizes: '192x192', type: 'image/png', purpose: 'maskable' }
+    ]
+  };
+  const link = document.createElement('link');
+  link.rel = 'manifest';
+  link.href = 'data:application/manifest+json;charset=utf-8,' + encodeURIComponent(JSON.stringify(man));
+  document.head.appendChild(link);
+  const apple = document.createElement('link');
+  apple.rel = 'apple-touch-icon'; apple.href = icono;
+  document.head.appendChild(apple);
+
+  // ✈️ Modo offline: registra el service worker (sw.js debe estar
+  // en la misma carpeta que este index.html)
+  if ('serviceWorker' in navigator) {
+    navigator.serviceWorker.register('./sw.js').catch(() => {});
+  }
+})();
+</script>
+</body>
+</html>
